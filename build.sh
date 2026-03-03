@@ -6,7 +6,7 @@ set -e
 # 目录设置
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly WORKSPACE_ROOT="$SCRIPT_DIR"
-readonly BUILDSCRIPTS_DIR="$SCRIPT_DIR/buildscripts"
+readonly BUILDSCRIPTS_DIR="$SCRIPT_DIR/tools/build_scripts"
 
 # 预处理命令行参数，决定界面模式
 # 规则：只有无参数或明确指定--tui时才使用TUI界面
@@ -92,6 +92,20 @@ build_tui_if_needed() {
     local tui_binary="$BUILDSCRIPTS_DIR/bin/sunray_tui"
     local tui_src_dir="$BUILDSCRIPTS_DIR/tui"
     local build_dir="$tui_src_dir/build"
+
+    configure_tui_cmake() {
+        local cache_file="$build_dir/CMakeCache.txt"
+        if [[ -f "$cache_file" ]]; then
+            local cached_home
+            cached_home="$(grep '^CMAKE_HOME_DIRECTORY:INTERNAL=' "$cache_file" 2>/dev/null | cut -d= -f2-)"
+            if [[ -n "$cached_home" && "$cached_home" != "$tui_src_dir" ]]; then
+                print_warning "检测到旧CMake缓存路径: $cached_home"
+                print_status "清理TUI构建缓存并重新配置..."
+                rm -rf "$build_dir/CMakeCache.txt" "$build_dir/CMakeFiles"
+            fi
+        fi
+        (cd "$build_dir" && cmake ..)
+    }
     
     # Check dependencies first
     print_status "Checking TUI dependencies..."
@@ -117,7 +131,11 @@ build_tui_if_needed() {
         mkdir -p "$build_dir" || { print_error "无法创建构建目录: $build_dir"; exit 1; }
         
         print_status "配置CMake..."
-        (cd "$build_dir" && cmake ..) || { print_error "CMake配置失败"; exit 1; }
+        if ! configure_tui_cmake; then
+            print_warning "CMake配置失败，尝试清理TUI构建目录后重试..."
+            rm -rf "$build_dir/CMakeCache.txt" "$build_dir/CMakeFiles"
+            configure_tui_cmake || { print_error "CMake配置失败"; exit 1; }
+        fi
         
         print_status "编译TUI程序..."
         (cd "$build_dir" && make -j10) || { print_error "编译失败\n请检查源码或依赖项"; exit 1; }

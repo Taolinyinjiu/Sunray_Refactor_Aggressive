@@ -40,4 +40,6 @@ logs/
 *.swp
 *.swo
 
+# Deprecated build scripts
+/tools/build_scripts/build_deprecated/
 
