@@ -1,0 +1,43 @@
+# ROS/Catkin workspace files
+.catkin_workspace
+build/
+devel/
+logs/
+
+# Media files
+*.mp4
+*.avi
+*.jpg
+*.png
+*.svj
+
+# Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled object files
+*.slo
+*.lo
+*.o
+*.obj
+*.d
+
+# Executables
+*.exe
+*.out
+*.app
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+
