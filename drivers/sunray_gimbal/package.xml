@@ -2,7 +2,7 @@
 <package format="2">
   <name>sunray_gimbal</name>
   <version>0.0.0</version>
-  <description>The sunray_gimbal package</description>
+  <description>The sunray gimbal package</description>
 
 
  <maintainer email="sirui@yundrone.com">YunDrone Tech</maintainer>

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-# @file gimbal_control_node.py
 # @描述: 云台统一控制节点，集中管理 SDK 实例，处理全部功能话题
 
 import sys
 import os
-import threading
 import rospy
 import ffmpeg
 import time
@@ -27,28 +25,7 @@ current = os.path.dirname(os.path.realpath(__file__))
 parent_directory = os.path.dirname(current)
 sys.path.append(parent_directory)
 from utils.siyi_sdk import SIYISDK
-#from stream import SIYIRTSP
 
-#rtsp获取视频流配置器
-class RTSPStreamer:
-    def __init__(self, rtsp_url, width=1280, height=720):
-        self.rtsp_url = rtsp_url
-        self.width = width
-        self.height = height
-        self.process = (
-            ffmpeg
-            .input(self.rtsp_url, rtsp_transport='tcp')
-            .output('pipe:', format='rawvideo', pix_fmt='bgr24', s=f'{width}x{height}')
-            .run_async(pipe_stdout=True, pipe_stderr=True)
-        )
-
-    def get_frame(self):
-        frame_size = self.width * self.height * 3
-        raw_frame = self.process.stdout.read(frame_size)
-        if len(raw_frame) != frame_size:
-            return None
-        frame = np.frombuffer(raw_frame, np.uint8).reshape((self.height, self.width, 3))
-        return frame
 
 class GimbalControlNode:
     def __init__(self):
@@ -60,7 +37,6 @@ class GimbalControlNode:
         # 读取参数
         ip = rospy.get_param("~gimbal_ip", "192.168.144.25")
         port = rospy.get_param("~gimbal_port", 37260)
-        rtsp_url = rospy.get_param("~rtsp_url", f"rtsp://{ip}:8554/main.264")
 
         # 连接云台
         self.cam = SIYISDK(server_ip=ip, port=port)
@@ -68,27 +44,15 @@ class GimbalControlNode:
             rospy.logerr("云台连接失败")
             sys.exit(1)
 
-        # 初始化 RTSP 拉流器（使用 ffmpeg）
-        self.width = rospy.get_param("~frame_width", 1280)
-        self.height = rospy.get_param("~frame_height", 720)
-        self.fps = rospy.get_param("~gimbal_fps", 30)
-        self.rtsp_url = rospy.get_param("~rtsp_url", f"rtsp://{ip}:8554/main.264")
-
-        # 启动视频发布线程
-        self.streamer = RTSPStreamer(self.rtsp_url, self.width, self.height)
-        self.stream_thread = threading.Thread(target=self.video_loop)
-        self.stream_thread.daemon = True
-        self.stream_thread.start()
-
         #订阅云台一键复位话题
         rospy.Subscriber("/sunray/gimbal_reset", Bool, self.reset_callback)
         #订阅设置目标角度话题
         rospy.Subscriber("/sunray/gimbal_set_angles", Vector3, self.angle_callback)
         #订阅设置目标速度话题
         rospy.Subscriber("/sunray/gimbal_set_speed", Vector3, self.speed_callback)
-        #订阅一键回中话题<exec_depend>message_runtime</exec_depend>
+        #订阅一键回中话题
         rospy.Subscriber("/sunray/gimbal_center_cmd", Bool, self.center_callback)
-        #订阅一键朝下话题<exec_depend>message_runtime</exec_depend>
+        #订阅一键朝下话题
         rospy.Subscriber("/sunray/gimbal_down_cmd", Bool, self.down_callback)
         #订阅模式切换话题
         rospy.Subscriber("/sunray/gimbal_mode_switch", UInt8, self.mode_callback)
@@ -115,18 +79,19 @@ class GimbalControlNode:
         self.video_pub = rospy.Publisher("/camera/video_stream", CompressedImage, queue_size=10)
         # 姿态发布器
         self.attitude_pub = rospy.Publisher("/sunray/gimbal_attitude", Vector3, queue_size=10)
-        self.timer = rospy.Timer(rospy.Duration(0.5), self.publish_attitude)
+        self.attitude_pub_timer = rospy.Timer(rospy.Duration(1), self.publish_attitude)
+        
         #云台信息发布器
         self.device_info_pub = rospy.Publisher("/sunray/gimbal_info", String, queue_size=1)
-        #云台参数发布
-        self.gimbal_param_pub = rospy.Publisher("/sunray/gimbal_param",GimbalParams,queue_size=1)
 
+        #云台参数发布
+        self.gimbal_param_pub = rospy.Publisher("/sunray/gimbal_param", GimbalParams, queue_size=1)
 
         sleep(1.0)
-        self._publish_device_info()
-        self._publish_video_params()
+        self.publish_device_info()
+        self.publish_video_params()
+        
         rospy.loginfo("云台主控节点已启动，监听所有控制话题...")
-        rospy.loginfo(f"开始拉取 RTSP 流：{rtsp_url}")
 
         # 注册节点关闭时的回调函数
         rospy.on_shutdown(self.shutdown_hook)
@@ -158,24 +123,6 @@ class GimbalControlNode:
                 rospy.logerr(f"发送软重启命令失败: {str(e)}")
         else:
             rospy.loginfo("软重启命令已发送过，跳过重复操作")
-
-    #重新启动RTSP拉流器
-    def restart_rtsp_stream(self):
-        rospy.loginfo("准备重新启动 RTSP 拉流器...")
-        try:
-            # 停止原来的 ffmpeg 子进程
-            if self.streamer and self.streamer.process:
-                self.streamer.process.terminate()
-                self.streamer.process.wait()
-        except Exception as e:
-            rospy.logwarn(f"终止 RTSP 流失败: {e}")
-
-        # 重新创建拉流器并启动线程
-        self.streamer = RTSPStreamer(self.rtsp_url, self.width, self.height)
-        self.stream_thread = threading.Thread(target=self.video_loop)
-        self.stream_thread.daemon = True
-        self.stream_thread.start()
-        rospy.loginfo("成功启动 RTSP 拉流器...")
 
     def auto_set_utc_time(self, event):
         """自动设置相机UTC时间"""
@@ -254,7 +201,7 @@ class GimbalControlNode:
         center_feedback = self.cam.getCenteringFeedback()
         rospy.loginfo(f"云台回中反馈: {center_feedback}")
 
-        # 2. 绝对变倍复位def _publish_device_info(self):
+        # 2. 绝对变倍复位
         self.cam.requestAbsoluteZoom(1.0)
         sleep(1)
         current_zoom = self.cam.getCurrentZoomLevel()
@@ -418,8 +365,6 @@ class GimbalControlNode:
         self.cam.requestGimbalReboot(camera_reboot=1, gimbal_reset=0)
         rospy.sleep(8)
 
-        self.restart_rtsp_stream()
-
         if enc_type == 1:
             enc_type = "H264"
         elif enc_type ==2:
@@ -430,7 +375,7 @@ class GimbalControlNode:
         else:
             rospy.logwarn(f"[设置失败] 视频参数发送失败")
 
-        self._publish_video_params()
+        self.publish_video_params()
         rospy.loginfo("参数更新完成")
 
     #云台状态处理服务
@@ -592,7 +537,7 @@ class GimbalControlNode:
         self.attitude_pub.publish(msg)
 
     #云台信息发布
-    def _publish_device_info(self):
+    def publish_device_info(self):
         self.cam.requestHardwareID()
         sleep(0.3)
         hardware_id = self.cam.getHardwareID()
@@ -624,7 +569,7 @@ class GimbalControlNode:
         self.device_info_pub.publish(info_str)
 
     #相机云台参数发布
-    def _publish_video_params(self):
+    def publish_video_params(self):
         # 请求参数
         self.cam.requestGimbalParam()
         sleep(0.5)
@@ -660,36 +605,6 @@ class GimbalControlNode:
         
         # 发布话题
         self.gimbal_param_pub.publish(msg)
-
-    #视频流拉取并转换
-    def video_loop(self):
-        rate = rospy.Rate(self.fps)
-        drop_count = 0 #丢帧计数器
-        drop_limit = 40 #最大丢帧次数，超过就重启流
-
-        while not rospy.is_shutdown():
-            frame = self.streamer.get_frame()
-            if frame is None or frame.size == 0:
-                drop_count+=1
-                rospy.logwarn_throttle(5, f"[WARN] No frame received from RTSP stream. (count={drop_count})")
-
-                if drop_count >= drop_limit:
-                    rospy.logwarn(f"[ERROR] 连续 {drop_limit} 次未收到帧，尝试重启 RTSP 拉流...")
-                    self.restart_rtsp_stream()
-                    return  # 退出当前线程，由重启逻辑开启新线程
-
-                rate.sleep()
-                continue
-            drop_count = 0
-                
-            msg = CompressedImage()
-            msg.header.stamp = rospy.Time.now()
-            msg.format = "jpeg"
-            _, buffer = cv2.imencode('.jpg', frame)
-            msg.data = buffer.tobytes()
-
-            self.video_pub.publish(msg)
-            rate.sleep()
 
 
     def run(self):

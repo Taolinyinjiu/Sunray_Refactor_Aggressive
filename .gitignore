@@ -10,6 +10,7 @@ logs/
 *.jpg
 *.png
 *.svj
+*.gif
 
 # Static libraries
 *.lai
@@ -34,12 +35,21 @@ logs/
 *.out
 *.app
 
+# Python bytecode
+*.pyc
+__pycache__/
+
 # IDE and editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Deprecated build scripts
-/tools/build_scripts/build_deprecated/
+# Build scripts
+/tools/build_scripts/bin/
+/tools/build_scripts/tui/build/
+/tools/build_scripts/tui/third_party/
+
+.clang-tidy
+.clang-format
 
