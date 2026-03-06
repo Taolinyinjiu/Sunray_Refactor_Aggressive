@@ -32,10 +32,10 @@ modules:
     source_path: "drivers/sunray_mavros"
     build_path: "build/sunray_mavros"
     dependencies: []
-  sunray_vrpn:
-    description: "sunray_vrpn 功能包"
-    source_path: "drivers/sunray_vrpn"
-    build_path: "build/sunray_vrpn"
+  vrpn_client_ros:
+    description: "vrpn_client_ros 功能包"
+    source_path: "drivers/vrpn_client_ros"
+    build_path: "build/vrpn_client_ros"
     dependencies: []
   sunray_gimbal:
     description: "sunray_gimbal 功能包"
@@ -85,20 +85,19 @@ groups:
 
   S-150-Basic:
     description: "Sunray-150-基础款功能包"
-    modules: ["sunray_mavros","sunray_vrpn","sunray_mocap"]
+    modules: ["sunray_mavros","vrpn_client_ros","sunray_mocap"]
 
   S-150-Lidar:
     description: "Sunray-150-三维激光雷达款功能包"
-    modules: ["sunray_mavros","sunray_vrpn","livox_ros_driver2","sunray_mocap","fast_lio"]
+    modules: ["sunray_mavros","vrpn_client_ros","livox_ros_driver2","sunray_mocap","fast_lio"]
 
   S-150-Stereo:
     description: "Sunray-150-双目款功能包"
-    modules: ["sunray_mavros","sunray_vrpn","sunray_mocap","sunray_viobot"]
+    modules: ["sunray_mavros","vrpn_client_ros","sunray_mocap","sunray_viobot"]
 
   S-300-Standard:
     description: "Sunray-300-标准款功能包"
-    modules: ["sunray_mavros","sunray_vrpn","livox_ros_driver2","sunray_mocap","fast_lio","sunray_gimbal"]
-
+    modules: ["sunray_mavros","vrpn_client_ros","livox_ros_driver2","sunray_mocap","fast_lio","sunray_gimbal"]
 
 # ========== 构建配置 ==========
 build_config:
