@@ -1,14 +1,14 @@
 #include <ros/ros.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
-#include <message_filters/sync_policies/exact_time.h>
+#include <message_filters/sync_policies/approximate_time.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <signal.h>
 #include "sunray_log.hpp"
 
-typedef message_filters::sync_policies::ExactTime<geometry_msgs::PoseStamped, geometry_msgs::TwistStamped> SyncPolicy;
+typedef message_filters::sync_policies::ApproximateTime<geometry_msgs::PoseStamped, geometry_msgs::TwistStamped> SyncPolicy;
 
 ros::Publisher mocap_odom_pub;
 
@@ -18,8 +18,7 @@ void MySigintHandler(int sig) {
     ros::shutdown();
 }
 
-void SyncCallback(const geometry_msgs::PoseStamped::ConstPtr& pose_msg,
-                  const geometry_msgs::TwistStamped::ConstPtr& twist_msg) {
+void SyncCallback(const geometry_msgs::PoseStamped::ConstPtr& pose_msg, const geometry_msgs::TwistStamped::ConstPtr& twist_msg) {
 
     nav_msgs::Odometry odom_msg;
 
@@ -64,10 +63,10 @@ int main(int argc, char** argv) {
 
     std::string pose_sub_topic = "/vrpn_client_node/uav" + std::to_string(uav_id) + "/pose";
     std::string twist_sub_topic = "/vrpn_client_node/uav" + std::to_string(uav_id) + "/twist";
-    message_filters::Subscriber<geometry_msgs::PoseStamped> mocap_pose_sub(nh, pose_sub_topic, 10);
-    message_filters::Subscriber<geometry_msgs::TwistStamped> mocap_twist_sub(nh, twist_sub_topic, 10);
+    message_filters::Subscriber<geometry_msgs::PoseStamped> mocap_pose_sub(nh, pose_sub_topic, 20);
+    message_filters::Subscriber<geometry_msgs::TwistStamped> mocap_twist_sub(nh, twist_sub_topic, 20);
 
-    message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(10), mocap_pose_sub, mocap_twist_sub);
+    message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(20), mocap_pose_sub, mocap_twist_sub);
     sync.registerCallback(boost::bind(&SyncCallback, _1, _2));
 
     SUNRAY_INFO("Subscribe pose topic: {}", pose_sub_topic);

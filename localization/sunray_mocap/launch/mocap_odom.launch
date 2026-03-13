@@ -1,6 +1,6 @@
 <launch>
 
-  <node pkg="mocap" type="mocap_odom_node" name="mocap_odom_node" output="screen">
+  <node pkg="sunray_mocap" type="mocap_odom_node" name="mocap_odom_node" output="screen">
   
   </node>
 
