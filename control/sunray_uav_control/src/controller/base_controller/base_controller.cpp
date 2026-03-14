@@ -1,6 +1,7 @@
 #include "controller/base_controller/base_controller.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace uav_control {
 
@@ -21,11 +22,14 @@ bool Base_Controller::set_takeoff_mode(double relative_takeoff_height,
   if (controller_state_ != ControllerState::OFF) {
     return false;
   }
+  reset_trajectory_tracking();
+  trajectory_completed_ = false;
   
-	// 刷新home位置
-	home_position_ = uav_current_state_.position;
-	
-	// 更新起飞最大速度
+		// 刷新home位置
+		home_position_ = uav_current_state_.position;
+  home_position_initialized_ = true;
+
+		// 更新起飞最大速度
   takeoff_max_velocity_ = max_takeoff_velocity;
 
   // 进入起飞流程时刷新地面参考高度，供后续降落目标使用。
@@ -65,6 +69,8 @@ bool Base_Controller::set_land_mode() {
       controller_state_ == ControllerState::UNDEFINED) {
     return false;
   }
+  reset_trajectory_tracking();
+  trajectory_completed_ = false;
 
   // 以当前位置作为降落参考；降落高度优先使用锁存的地面参考高度。
   land_expect_position_ = uav_current_state_.position;
@@ -76,18 +82,22 @@ bool Base_Controller::set_land_mode() {
   } else {
     land_expect_position_.z() = uav_current_state_.position.z();
   }
-  // 如果上一阶段最后的结果是land_expect_position_.z() ==
-  // uav_current_state_.position.z();
-  // 说明当前可能存在负阶段降落,也就是降落点低于起飞点,这时候由于降落是位置的,因此需要使用另一套参考逻辑
-  // 这里直接使用auto_land进行简化测试
-  if (land_expect_position_.z() == uav_current_state_.position.z()) {
-    land_type_ = 1;
-  }
-  // 请注意，这里我们没有回退到land_type =
-  // 0的实现，因为我们认为，当触发了auto_land后，整个使用场景实际上并不能够稳定的使用基于起飞高度和五次项曲线的降落模式
+
+  ROS_INFO(
+      "[Base_Controller] enter LAND: current_odom=(%.3f, %.3f, %.3f) "
+      "ground_z=%.3f land_expect=(%.3f, %.3f, %.3f) land_type=%u",
+      uav_current_state_.position.x(), uav_current_state_.position.y(),
+      uav_current_state_.position.z(), ground_reference_z_,
+      land_expect_position_.x(), land_expect_position_.y(),
+      land_expect_position_.z(), static_cast<unsigned>(land_type_));
+
+  // 降落类型仅保留“按配置/请求显式选择”的语义，不再因为高度参考退化而
+  // 自动强制切到 AUTO.LAND；这样可以稳定复用代码侧末段降落逻辑。
   land_initialized_ = false;
   land_holdstart_time_ = ros::Time(0);
   land_holdkeep_time_ = ros::Time(0);
+  land_low_velocity_start_time_ = ros::Time(0);
+  land_touchdown_detected_time_ = ros::Time(0);
   controller_state_ = ControllerState::LAND;
   return true;
 }
@@ -106,7 +116,102 @@ bool Base_Controller::set_emergency_mode() {
       controller_state_ == ControllerState::UNDEFINED) {
     return false;
   }
+  reset_trajectory_tracking();
+  trajectory_completed_ = false;
   controller_state_ = ControllerState::EMERGENCY_LAND;
+  return true;
+}
+
+void Base_Controller::reset_trajectory_tracking() {
+  trajectory_tracking_enabled_ = false;
+  trajectory_buffer_.clear();
+}
+
+bool Base_Controller::update_trajectory_reference_from_buffer(
+    const ros::Time &now) {
+  if (!trajectory_tracking_enabled_) {
+    return false;
+  }
+
+  trajectory_buffer_.update_active(now);
+  const TrajectorySample sample = trajectory_buffer_.sample(now);
+  if (!sample.valid) {
+    return false;
+  }
+
+  trajectory_ = sample.point;
+  if (sample.reached_end) {
+    trajectory_tracking_enabled_ = false;
+    trajectory_completed_ = true;
+    trajectory_buffer_.mark_completed();
+  }
+  return true;
+}
+
+bool Base_Controller::set_off_mode() {
+  if (!uav_current_state_.isValid()) {
+    return false;
+  }
+
+  reset_trajectory_tracking();
+  trajectory_completed_ = false;
+  TrajectoryPointReference trajectory_ref;
+  trajectory_ref.clear_all();
+  trajectory_ref.set_position(uav_current_state_.position);
+  trajectory_ = trajectory_ref.toRosMessage();
+  controller_state_ = ControllerState::OFF;
+  return true;
+}
+
+bool Base_Controller::configure_landing(uint8_t land_type,
+                                        double land_max_velocity) {
+  land_type_ = (land_type == 0U) ? 0U : 1U;
+  land_max_velocity_ = (land_max_velocity > 0.0) ? -land_max_velocity
+                                                 : land_max_velocity;
+  if (std::abs(land_max_velocity_) < 1e-6) {
+    land_max_velocity_ = -0.5;
+  }
+  return true;
+}
+
+bool Base_Controller::set_hover_mode() {
+  if (!uav_current_state_.isValid()) {
+    return false;
+  }
+
+  if (controller_state_ == ControllerState::OFF ||
+      controller_state_ == ControllerState::UNDEFINED) {
+    return false;
+  }
+
+  reset_trajectory_tracking();
+  trajectory_completed_ = false;
+  TrajectoryPointReference trajectory_ref;
+  trajectory_ref.clear_all();
+  trajectory_ref.set_position(uav_current_state_.position);
+  trajectory_ = trajectory_ref.toRosMessage();
+  controller_state_ = ControllerState::HOVER;
+  return true;
+}
+
+bool Base_Controller::set_move_mode() {
+  if (controller_state_ == ControllerState::OFF ||
+      controller_state_ == ControllerState::UNDEFINED) {
+    return false;
+  }
+
+  if (trajectory_tracking_enabled_ && trajectory_buffer_.has_reference()) {
+    controller_state_ = ControllerState::MOVE;
+    return true;
+  }
+
+  const TrajectoryPointReference trajectory_ref(trajectory_);
+  if (trajectory_ref.valid_mask ==
+      static_cast<uint32_t>(TrajectoryPointReference::Field::UNDEFINED)) {
+    return false;
+  }
+
+  controller_state_ = ControllerState::MOVE;
   return true;
 }
 
@@ -191,12 +296,55 @@ bool Base_Controller::set_px4_land_status(const bool land_status){
  * 当 `valid_mask` 为 `UNDEFINED` 时，会按非零字段推断有效通道，
  * 用于兼容未显式设置有效位的旧调用路径。
  */
-bool Base_Controller::set_trajectory(const TrajectoryPoint &trajectory) {
+bool Base_Controller::set_trajectory(
+    const uav_control::TrajectoryPoint &trajectory) {
+  reset_trajectory_tracking();
+  trajectory_completed_ = false;
   trajectory_ = trajectory;
-  if (trajectory_.valid_mask ==
-      static_cast<uint32_t>(TrajectoryPoint::ValidMask::UNDEFINED)) {
-    trajectory_.infer_valid_mask_from_nonzero();
+  TrajectoryPointReference trajectory_ref(trajectory_);
+  if (trajectory_ref.valid_mask ==
+      static_cast<uint32_t>(TrajectoryPointReference::Field::UNDEFINED)) {
+    trajectory_ref.infer_valid_mask_from_nonzero();
+    trajectory_ = trajectory_ref.toRosMessage();
   }
+  return true;
+}
+
+bool Base_Controller::set_trajectory(const uav_control::Trajectory &trajectory) {
+  if (trajectory.points.empty()) {
+    return false;
+  }
+
+  if (trajectory.points.size() == 1U) {
+    return set_trajectory(trajectory.points.front());
+  }
+
+  reset_trajectory_tracking();
+  trajectory_completed_ = false;
+
+  const ros::Time now = ros::Time::now();
+  const uint32_t fallback_id = next_trajectory_id_++;
+  if (!trajectory_buffer_.push_pending(trajectory, now, fallback_id)) {
+    return false;
+  }
+
+  // 为将来时生效的轨迹预置一个安全保持参考，避免沿用上一条控制命令。
+  if (uav_current_state_.isValid()) {
+    TrajectoryPointReference hold_ref;
+    hold_ref.clear_all();
+    hold_ref.set_position(uav_current_state_.position);
+    trajectory_ = hold_ref.toRosMessage();
+  } else {
+    TrajectoryPointReference first_ref(trajectory.points.front());
+    if (first_ref.valid_mask ==
+        static_cast<uint32_t>(TrajectoryPointReference::Field::UNDEFINED)) {
+      first_ref.infer_valid_mask_from_nonzero();
+    }
+    trajectory_ = first_ref.toRosMessage();
+  }
+
+  trajectory_tracking_enabled_ = true;
+  (void)update_trajectory_reference_from_buffer(now);
   return true;
 }
 
@@ -207,6 +355,43 @@ bool Base_Controller::set_trajectory(const TrajectoryPoint &trajectory) {
  */
 ControllerState Base_Controller::get_controller_state() const {
   return controller_state_;
+}
+
+const uav_control::TrajectoryPoint &Base_Controller::get_trajectory_reference()
+    const {
+  return trajectory_;
+}
+
+bool Base_Controller::has_home_position() const {
+  return home_position_initialized_;
+}
+
+bool Base_Controller::update_home_position(Eigen::Vector3d position) const {
+  if (!position.allFinite()) {
+    return false;
+  }
+
+  Base_Controller *self = const_cast<Base_Controller *>(this);
+  self->home_position_ = position;
+  self->home_position_initialized_ = true;
+  return true;
+}
+
+bool Base_Controller::update_home_position(Eigen::Vector3d position,
+                                           double yaw) const {
+  if (!std::isfinite(yaw)) {
+    return false;
+  }
+
+  return update_home_position(position);
+}
+
+const Eigen::Vector3d &Base_Controller::get_home_position() const {
+  return home_position_;
+}
+
+bool Base_Controller::should_use_px4_auto_land() const {
+  return land_type_ == 1U;
 }
 
 /**
@@ -240,6 +425,10 @@ bool Base_Controller::is_emergency_completed() const {
   if (controller_state_ == ControllerState::OFF)
     return true;
   return false;
+}
+
+bool Base_Controller::is_trajectory_completed() const {
+  return trajectory_completed_;
 }
 
 /**

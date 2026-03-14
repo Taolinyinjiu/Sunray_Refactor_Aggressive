@@ -4,6 +4,35 @@
 #include <cmath>
 
 namespace uav_control {
+namespace {
+
+bool isFiniteQuaternion(const Eigen::Quaterniond &q) {
+  return std::isfinite(q.w()) && std::isfinite(q.x()) &&
+         std::isfinite(q.y()) && std::isfinite(q.z());
+}
+
+double yawFromQuaternion(const Eigen::Quaterniond &q) {
+  Eigen::Quaterniond normalized = q;
+  if (normalized.norm() > 1e-9) {
+    normalized.normalize();
+  } else {
+    normalized = Eigen::Quaterniond::Identity();
+  }
+
+  const double siny_cosp =
+      2.0 * (normalized.w() * normalized.z() + normalized.x() * normalized.y());
+  const double cosy_cosp =
+      1.0 - 2.0 * (normalized.y() * normalized.y() +
+                   normalized.z() * normalized.z());
+  return std::atan2(siny_cosp, cosy_cosp);
+}
+
+double clampSymmetric(double value, double limit_abs) {
+  const double limit = std::abs(limit_abs);
+  return std::max(-limit, std::min(limit, value));
+}
+
+} // namespace
 
 // 根据控制器当前状态，进入对应的函数
 ControllerOutput Position_Controller::update(void) {
@@ -69,6 +98,8 @@ void Position_Controller::reset_land_context_if_needed() {
     land_holdstart_time_ = ros::Time(0);
     land_holdkeep_time_ = ros::Time(0);
     land_singlecurve_time_ = 0.0;
+    land_low_velocity_start_time_ = ros::Time(0);
+    land_touchdown_detected_time_ = ros::Time(0);
   }
 }
 
@@ -142,7 +173,9 @@ ControllerOutput Position_Controller::handle_takeoff_state() {
       const ros::Duration hold_time = now - takeoff_holdstart_time_;
       if (hold_time.toSec() >= hold_required) {
         // 设置轨迹点为当前起飞参数
-        trajectory_.position = takeoff_expect_position_;
+        TrajectoryPointReference hold_trajectory(trajectory_);
+        hold_trajectory.set_position(takeoff_expect_position_);
+        trajectory_ = hold_trajectory.toRosMessage();
         // 切换到HOVER状态
         controller_state_ = ControllerState::HOVER;
         // 构造零速输出
@@ -224,34 +257,37 @@ ControllerOutput Position_Controller::handle_takeoff_state() {
 ControllerOutput Position_Controller::handle_hover_state() {
   ControllerOutput temp_output;
   // HOVER状态下，设置输出为当前轨迹点
+  const TrajectoryPointReference trajectory_ref(trajectory_);
   temp_output.channel_enable(ControllerOutputMask::POSITION);
-  temp_output.position = trajectory_.position;
+  temp_output.position = trajectory_ref.position;
   return temp_output;
 }
 
 ControllerOutput Position_Controller::handle_move_state() {
   ControllerOutput temp_output;
+  (void)update_trajectory_reference_from_buffer(ros::Time::now());
+  const TrajectoryPointReference trajectory_ref(trajectory_);
   // 当切换到MOVE时，通常是接受到了相关的控制指令
-  if (trajectory_.is_channel_enabled(TrajectoryPoint::ValidMask::POSITION)) {
+  if (trajectory_ref.is_field_enabled(TrajectoryPointReference::Field::POSITION)) {
     temp_output.channel_enable(ControllerOutputMask::POSITION);
-    temp_output.position = trajectory_.position;
+    temp_output.position = trajectory_ref.position;
   }
-  if (trajectory_.is_channel_enabled(TrajectoryPoint::ValidMask::VELOCITY)) {
+  if (trajectory_ref.is_field_enabled(TrajectoryPointReference::Field::VELOCITY)) {
     temp_output.channel_enable(ControllerOutputMask::VELOCITY);
-    temp_output.velocity = trajectory_.velocity;
+    temp_output.velocity = trajectory_ref.velocity;
   }
-  if (trajectory_.is_channel_enabled(
-          TrajectoryPoint::ValidMask::ACCELERATION)) {
+  if (trajectory_ref.is_field_enabled(
+          TrajectoryPointReference::Field::ACCELERATION)) {
     temp_output.channel_enable(ControllerOutputMask::ACCELERATION);
-    temp_output.acceleration_or_force = trajectory_.acceleration;
+    temp_output.acceleration_or_force = trajectory_ref.acceleration;
   }
-  if (trajectory_.is_channel_enabled(TrajectoryPoint::ValidMask::YAW)) {
+  if (trajectory_ref.is_field_enabled(TrajectoryPointReference::Field::YAW)) {
     temp_output.channel_enable(ControllerOutputMask::YAW);
-    temp_output.yaw = trajectory_.yaw;
+    temp_output.yaw = trajectory_ref.heading;
   }
-  if (trajectory_.is_channel_enabled(TrajectoryPoint::ValidMask::YAW_RATE)) {
+  if (trajectory_ref.is_field_enabled(TrajectoryPointReference::Field::YAW_RATE)) {
     temp_output.channel_enable(ControllerOutputMask::YAW_RATE);
-    temp_output.yaw_rate = trajectory_.yaw_rate;
+    temp_output.yaw_rate = trajectory_ref.heading_rate;
   }
 
   // position_controller
@@ -260,150 +296,105 @@ ControllerOutput Position_Controller::handle_move_state() {
 }
 
 ControllerOutput Position_Controller::handle_land_state() {
-  /** ---------------降落准备工作---------------- */
-  // 1. 构造临时输出变量
   ControllerOutput temp_output;
-  // 2. 检测当前是否为第一次进入降落函数
-  if (land_initialized_ == false) {
-    // 第一次进入降落阶段,置位标识符
+  const ros::Time now = ros::Time::now();
+
+  if (!land_initialized_) {
     land_initialized_ = true;
-    // 设置降落开始时间为当前时间戳
-    land_start_time_ = ros::Time::now();
-    // 重置时间参数
+    land_start_time_ = now;
     land_holdstart_time_ = ros::Time(0);
     land_holdkeep_time_ = ros::Time(0);
+    land_low_velocity_start_time_ = ros::Time(0);
+    land_touchdown_detected_time_ = ros::Time(0);
+    land_expect_position_.x() = uav_current_state_.position.x();
+    land_expect_position_.y() = uav_current_state_.position.y();
+
+    if (isFiniteQuaternion(uav_current_state_.orientation) &&
+        uav_current_state_.orientation.norm() > 1e-9) {
+      land_yaw_ = yawFromQuaternion(uav_current_state_.orientation);
+    } else if (isFiniteQuaternion(px4_attitude_) &&
+               px4_attitude_.norm() > 1e-9) {
+      land_yaw_ = yawFromQuaternion(px4_attitude_);
+    } else {
+      land_yaw_ = 0.0;
+    }
+
+    ROS_INFO(
+        "[Position_Controller] LAND init: hold_xy=(%.3f, %.3f) current_z=%.3f "
+        "ground_z=%.3f land_type=%u yaw=%.3f",
+        land_expect_position_.x(), land_expect_position_.y(),
+        uav_current_state_.position.z(), ground_reference_z_,
+        static_cast<unsigned>(land_type_), land_yaw_);
   }
-  /** ---------------判断降落类型---------------- */
-  if (land_type_ == 1) {
-    // 如果降落类型为1，说明当前使用的是px4的auto_land降落方式，但是Controller并不能对px4的模式进行切换，因此这里将控制权限转交给状态机
-    // 也就是说，这里控制器输出空状态，状态机使用另一个函数切换px4到auto_land模式
+
+  if (land_type_ == 1U) {
     temp_output.clear_all();
     return temp_output;
   }
-  /** ---------------计算理论降落速度---------------- */
-  // 1. 起点位置和速度
-  Eigen::Vector3d start_position = trajectory_.position;
-  Eigen::Vector3d start_velocity;
-  start_velocity.setZero();
-  // 2. 终点位置和速度
-  Eigen::Vector3d stop_position =
-      land_expect_position_; // land_expect_position_.z使用的是起飞时记忆的参考地平面
-  // stop_position.z() = 0.3;
-  Eigen::Vector3d stop_velocity;
-  stop_velocity.setZero();
-  stop_velocity.z() = -0.2;
-  // 3. 根据当前z轴差值，以及降落过程中的最大速度，计算降落时间
-  if (land_singlecurve_time_ == 0.0) {
-    // 根据最大速度反推起飞时间
-    double curve_max_velocity = abs(land_max_velocity_);
-    const auto min_duration_ret =
-        curve::solve_quintic_min_duration_from_max_speed(
-            start_position, stop_position, curve_max_velocity);
-    // 如果曲线计算正确，则valid为true
-    if (min_duration_ret.valid == true) {
-      // 设置理论时间
-      land_singlecurve_time_ = min_duration_ret.min_duration_s;
-      // 考虑到实际中的一些原因，我们将这个值扩大一些
-      land_singlecurve_time_ *= 2;
-    } else {
-      // 如果曲线得不到有效的计算值，说明参数有问题，此时切换到auto_land模式进行降落
-      land_type_ = 1;
-      temp_output.clear_all();
-      temp_output.channel_enable(ControllerOutputMask::VELOCITY);
-      temp_output.velocity.setZero();
-      return temp_output;
-    }
-  }
-  /** ---------------计算降落五次项曲线参数----------------- */
-  if (land_singlecurve_time_ > land_singlecurve_limit_time_) {
-    // 如果曲线用时大于限制时间，则认为是符合要求的,根据曲线参数生成对应的指令
-    const auto curve_result = curve::evaluate_quintic_curve(
-        start_position, start_velocity, stop_position, stop_velocity,
-        land_start_time_.toSec(), land_singlecurve_time_,
-        ros::Time::now().toSec());
-    if (curve_result.valid == true) {
-      // 五次项曲线输出 位置 速度 加速度
-      temp_output.channel_enable(ControllerOutputMask::POSITION);
-      temp_output.channel_enable(ControllerOutputMask::VELOCITY);
-      temp_output.channel_enable(ControllerOutputMask::ACCELERATION);
-      temp_output.position = curve_result.position;
-      temp_output.velocity = curve_result.velocity;
-      temp_output.acceleration_or_force = curve_result.acceleration;
-    } else if (curve_result.valid == false) {
-      // 如果曲线生成有问题，那就直接匀速下降吧
-      temp_output.channel_enable(ControllerOutputMask::POSITION);
-      temp_output.channel_enable(ControllerOutputMask::VELOCITY);
-      temp_output.position =
-          land_expect_position_; // land_expect_position_.position.z() = 0.3
-      if (land_max_velocity_ < 0)
-        temp_output.velocity.z() = land_max_velocity_ / 2;
-      else
-        temp_output.velocity.z() = -land_max_velocity_ / 2;
+
+  const bool near_ground =
+      ground_reference_initialized_ &&
+      (uav_current_state_.position.z() <=
+       ground_reference_z_ + land_touchdown_height_threshold_m_);
+  const bool velocity_low =
+      std::abs(uav_current_state_.velocity.x()) <
+          land_touchdown_velocity_threshold_mps_ &&
+      std::abs(uav_current_state_.velocity.y()) <
+          land_touchdown_velocity_threshold_mps_ &&
+      std::abs(uav_current_state_.velocity.z()) <
+          land_touchdown_velocity_threshold_mps_;
+
+  if (near_ground && velocity_low) {
+    if (land_low_velocity_start_time_.isZero()) {
+      land_low_velocity_start_time_ = now;
     }
   } else {
-    // TODO：这里的逻辑需要修改
-    // 如果曲线生成有问题，那就直接匀速下降吧
-    temp_output.channel_enable(ControllerOutputMask::POSITION);
-    temp_output.channel_enable(ControllerOutputMask::VELOCITY);
-    temp_output.position =
-        land_expect_position_; // land_expect_position_.position.z() = 0.3
+    land_low_velocity_start_time_ = ros::Time(0);
+  }
 
-    if (land_max_velocity_ < 0)
-      temp_output.velocity.z() = land_max_velocity_ / 2;
-    else
-      temp_output.velocity.z() = -land_max_velocity_ / 2;
-  }
-  /** ---------------匀速下降阶段----------------- */
-  // 当z轴高度到达0.3m时，切换为速度控制，控制z轴速度
-  if (uav_current_state_.position.z() <= 0.1) {
-    // 清除参数
-    temp_output.clear_all();
-    temp_output.channel_enable(ControllerOutputMask::POSITION);
-    temp_output.channel_enable(ControllerOutputMask::VELOCITY);
-    // 重新注入参数
-    temp_output.position = land_expect_position_;
-    temp_output.position.z() -= 0.1;
-    temp_output.velocity = stop_velocity;
-  }
-  /** ---------------检测着陆阶段----------------- */
-  // 检测着陆分为两种方式，一种是根据传入的px4
-  // 着陆检测传感器的状态，另一个种是根据三轴速度是否 <-0.1
-  if (px4_land_status_ == true) {
-    // 此为最高的优先级，在该模式下，输出置零
-    temp_output.clear_all();
-    temp_output.channel_enable(ControllerOutputMask::VELOCITY);
-    temp_output.velocity.setZero();
-    temp_output.velocity.z() = -0.2;
-    land_holdkeep_time_ = ros::Time::now();
-    if ((land_holdkeep_time_ - land_holdstart_time_).toSec() >
-        land_success_time_) {
-      // 切换状态为OFF
+  const bool landed_by_velocity =
+      near_ground && !land_low_velocity_start_time_.isZero() &&
+      (now - land_low_velocity_start_time_).toSec() >=
+          land_touchdown_velocity_hold_time_s_;
+  const bool landed_detected = px4_land_status_ || landed_by_velocity;
+
+  temp_output.channel_enable(ControllerOutputMask::VELOCITY);
+  temp_output.channel_enable(ControllerOutputMask::YAW);
+  temp_output.velocity.setZero();
+  temp_output.yaw = land_yaw_;
+
+  if (landed_detected) {
+    if (land_touchdown_detected_time_.isZero()) {
+      land_touchdown_detected_time_ = now;
+      ROS_INFO(
+          "[Position_Controller] LAND touchdown detected: current=(%.3f, "
+          "%.3f, %.3f) sensor=%d low_velocity=%d",
+          uav_current_state_.position.x(), uav_current_state_.position.y(),
+          uav_current_state_.position.z(), px4_land_status_ ? 1 : 0,
+          landed_by_velocity ? 1 : 0);
+    }
+
+    temp_output.velocity.z() = -std::abs(land_touchdown_downpress_speed_mps_);
+    if ((now - land_touchdown_detected_time_).toSec() >=
+        land_touchdown_downpress_time_s_) {
       controller_state_ = ControllerState::OFF;
+      temp_output.velocity.setZero();
     }
     return temp_output;
   }
-	
-  if ((uav_current_state_.position.z() - land_expect_position_.z()) < 0.1) {
-    land_holdkeep_time_ = ros::Time::now();
-    if (land_holdstart_time_.isZero()) //
-    {
-			land_holdstart_time_ = ros::Time::now();
-      return temp_output;
-    }
-		printf("delta time = %f",(land_holdkeep_time_ - land_holdstart_time_).toSec());
-    if ((land_holdkeep_time_ - land_holdstart_time_).toSec() >
-        land_success_time_) {
-      // 切换状态为OFF
-      controller_state_ = ControllerState::OFF;
-      temp_output.clear_all();
-      temp_output.channel_enable(ControllerOutputMask::VELOCITY);
-      temp_output.velocity.setZero();
-      return temp_output;
-    }
-  }else{
-	land_holdstart_time_ = ros::Time(0);
-	}
-	return temp_output;
+
+  const double ex = land_expect_position_.x() - uav_current_state_.position.x();
+  const double ey = land_expect_position_.y() - uav_current_state_.position.y();
+  const double descent_speed =
+      (land_max_velocity_ < 0.0) ? land_max_velocity_
+                                 : -std::max(0.1, land_max_velocity_);
+
+  temp_output.velocity.x() =
+      clampSymmetric(land_xy_kp_ * ex, land_max_velocity_xy_mps_);
+  temp_output.velocity.y() =
+      clampSymmetric(land_xy_kp_ * ey, land_max_velocity_xy_mps_);
+  temp_output.velocity.z() = descent_speed;
+  return temp_output;
 }
 
 } // namespace uav_control

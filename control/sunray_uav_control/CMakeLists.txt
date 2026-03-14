@@ -58,14 +58,16 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   AttitudeCmd.msg
+  AttitudeCmdEnvelope.msg
   BspLine.msg
   ComplexCmd.msg
-  LandCmd.msg
-  PositionCmd.msg
-  ReturnHomeCmd.msg
-  TakeoffCmd.msg
-  TrajectoryCmd.msg
+  ComplexCmdEnvelope.msg
+  ControlMeta.msg
+  Trajectory.msg
+  TrajectoryEnvelope.msg
+  TrajectoryPoint.msg
   VelocityCmd.msg
+  VelocityCmdEnvelope.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -208,6 +210,7 @@ add_library(sunray_helper_lib
   src/sunray_helper/sunray_helper.cpp
 )
 target_link_libraries(sunray_helper_lib
+  uav_controller_lib
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
 )
@@ -222,6 +225,96 @@ target_link_libraries(sunray_helper_demo_node
   ${EIGEN3_LIBRARIES}
 )
 add_dependencies(sunray_helper_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(sunray_robot_group_demo_node
+  src/demo/sunray_robot_group_demo_node.cpp
+)
+target_link_libraries(sunray_robot_group_demo_node
+  sunray_helper_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+add_dependencies(sunray_robot_group_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(sunray_helper_circle_return_demo_node
+  src/demo/sunray_helper_circle_return_demo_node.cpp
+)
+target_link_libraries(sunray_helper_circle_return_demo_node
+  sunray_helper_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+add_dependencies(sunray_helper_circle_return_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(sunray_helper_square_demo_node
+  src/demo/sunray_helper_square_demo_node.cpp
+)
+target_link_libraries(sunray_helper_square_demo_node
+  sunray_helper_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+add_dependencies(sunray_helper_square_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(sunray_helper_hover_land_demo_node
+  src/demo/sunray_helper_hover_land_demo_node.cpp
+)
+target_link_libraries(sunray_helper_hover_land_demo_node
+  sunray_helper_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+add_dependencies(sunray_helper_hover_land_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(sunray_helper_pentagram_demo_node
+  src/demo/sunray_helper_pentagram_demo_node.cpp
+)
+target_link_libraries(sunray_helper_pentagram_demo_node
+  sunray_helper_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+add_dependencies(sunray_helper_pentagram_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(sunray_robot_group_circle_return_demo_node
+  src/demo/sunray_robot_group_circle_return_demo_node.cpp
+)
+target_link_libraries(sunray_robot_group_circle_return_demo_node
+  sunray_helper_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+add_dependencies(sunray_robot_group_circle_return_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(sunray_robot_group_square_demo_node
+  src/demo/sunray_robot_group_square_demo_node.cpp
+)
+target_link_libraries(sunray_robot_group_square_demo_node
+  sunray_helper_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+add_dependencies(sunray_robot_group_square_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(sunray_robot_group_hover_land_demo_node
+  src/demo/sunray_robot_group_hover_land_demo_node.cpp
+)
+target_link_libraries(sunray_robot_group_hover_land_demo_node
+  sunray_helper_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+add_dependencies(sunray_robot_group_hover_land_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(sunray_robot_group_pentagram_demo_node
+  src/demo/sunray_robot_group_pentagram_demo_node.cpp
+)
+target_link_libraries(sunray_robot_group_pentagram_demo_node
+  sunray_helper_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+add_dependencies(sunray_robot_group_pentagram_demo_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 add_executable(sunray_fsm_node
   src/demo/sunray_fsm_node.cpp

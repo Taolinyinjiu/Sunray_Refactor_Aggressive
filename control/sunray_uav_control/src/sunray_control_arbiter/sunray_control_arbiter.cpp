@@ -235,9 +235,18 @@ bool Sunray_Control_Arbiter::validate_output(
     const ControllerOutput &output) const {
   const bool has_pos = output.is_channel_enabled(ControllerOutputMask::POSITION);
   const bool has_vel = output.is_channel_enabled(ControllerOutputMask::VELOCITY);
+  const bool has_acc =
+      output.is_channel_enabled(ControllerOutputMask::ACCELERATION) ||
+      output.is_channel_enabled(ControllerOutputMask::FORCE);
+  const bool has_yaw = output.is_channel_enabled(ControllerOutputMask::YAW);
+  const bool has_yaw_rate =
+      output.is_channel_enabled(ControllerOutputMask::YAW_RATE);
   const bool has_att = output.is_channel_enabled(ControllerOutputMask::ATTITUDE);
+  const bool has_body_rate =
+      output.is_channel_enabled(ControllerOutputMask::BODY_RATE);
   const bool has_thr = output.is_channel_enabled(ControllerOutputMask::THRUST);
-  if (!(has_pos || has_vel || has_att || has_thr)) {
+  if (!(has_pos || has_vel || has_acc || has_yaw || has_yaw_rate || has_att ||
+        has_body_rate || has_thr)) {
     return false;
   }
 
@@ -255,6 +264,15 @@ bool Sunray_Control_Arbiter::validate_output(
   if (has_vel && !finiteVec(output.velocity)) {
     return false;
   }
+  if (has_acc && !finiteVec(output.acceleration_or_force)) {
+    return false;
+  }
+  if (has_yaw && !std::isfinite(output.yaw)) {
+    return false;
+  }
+  if (has_yaw_rate && !std::isfinite(output.yaw_rate)) {
+    return false;
+  }
   if (has_att) {
     if (!finiteQuat(output.attitude)) {
       return false;
@@ -263,6 +281,9 @@ bool Sunray_Control_Arbiter::validate_output(
     if (std::abs(qnorm - 1.0) > 1e-2) {
       return false;
     }
+  }
+  if (has_body_rate && !finiteVec(output.body_rate)) {
+    return false;
   }
   if (has_thr && !std::isfinite(output.thrust)) {
     return false;
@@ -318,13 +339,22 @@ bool Sunray_Control_Arbiter::publish_output(
     const ControllerOutput &output) {
   const bool has_pos = output.is_channel_enabled(ControllerOutputMask::POSITION);
   const bool has_vel = output.is_channel_enabled(ControllerOutputMask::VELOCITY);
+  const bool has_acc =
+      output.is_channel_enabled(ControllerOutputMask::ACCELERATION) ||
+      output.is_channel_enabled(ControllerOutputMask::FORCE);
+  const bool has_yaw = output.is_channel_enabled(ControllerOutputMask::YAW);
+  const bool has_yaw_rate =
+      output.is_channel_enabled(ControllerOutputMask::YAW_RATE);
   const bool has_att = output.is_channel_enabled(ControllerOutputMask::ATTITUDE);
+  const bool has_body_rate =
+      output.is_channel_enabled(ControllerOutputMask::BODY_RATE);
   const bool has_thr = output.is_channel_enabled(ControllerOutputMask::THRUST);
 
-  if (config_.prefer_position_target_raw && (has_pos || has_vel)) {
+  if (config_.prefer_position_target_raw &&
+      (has_pos || has_vel || has_acc || has_yaw || has_yaw_rate)) {
     return publish_position_target_raw(output);
   }
-  if (has_att || has_thr) {
+  if (has_att || has_body_rate || has_thr) {
     return publish_attitude_setpoint(output);
   }
   if (has_pos) {
@@ -395,6 +425,15 @@ bool Sunray_Control_Arbiter::publish_attitude_setpoint(
     msg.type_mask |= mavros_msgs::AttitudeTarget::IGNORE_ATTITUDE;
   }
 
+  if (output.is_channel_enabled(ControllerOutputMask::BODY_RATE)) {
+    msg.body_rate.x = output.body_rate.x();
+    msg.body_rate.y = output.body_rate.y();
+    msg.body_rate.z = output.body_rate.z();
+    msg.type_mask &= ~mavros_msgs::AttitudeTarget::IGNORE_ROLL_RATE;
+    msg.type_mask &= ~mavros_msgs::AttitudeTarget::IGNORE_PITCH_RATE;
+    msg.type_mask &= ~mavros_msgs::AttitudeTarget::IGNORE_YAW_RATE;
+  }
+
   if (output.is_channel_enabled(ControllerOutputMask::THRUST)) {
     msg.thrust = static_cast<float>(output.thrust);
   } else {
@@ -428,13 +467,26 @@ bool Sunray_Control_Arbiter::publish_position_target_raw(
   msg.acceleration_or_force.x = 0.0;
   msg.acceleration_or_force.y = 0.0;
   msg.acceleration_or_force.z = 0.0;
+  if (output.is_channel_enabled(ControllerOutputMask::ACCELERATION) ||
+      output.is_channel_enabled(ControllerOutputMask::FORCE)) {
+    msg.acceleration_or_force.x = output.acceleration_or_force.x();
+    msg.acceleration_or_force.y = output.acceleration_or_force.y();
+    msg.acceleration_or_force.z = output.acceleration_or_force.z();
+  }
 
-  if (output.is_channel_enabled(ControllerOutputMask::ATTITUDE)) {
+  if (output.is_channel_enabled(ControllerOutputMask::YAW)) {
+    msg.yaw = static_cast<float>(output.yaw);
+  } else if (output.is_channel_enabled(ControllerOutputMask::ATTITUDE)) {
     msg.yaw = static_cast<float>(quaternionToYaw(output.attitude));
   } else {
     msg.yaw = 0.0F;
   }
-  msg.yaw_rate = 0.0F;
+
+  if (output.is_channel_enabled(ControllerOutputMask::YAW_RATE)) {
+    msg.yaw_rate = static_cast<float>(output.yaw_rate);
+  } else {
+    msg.yaw_rate = 0.0F;
+  }
 
   local_raw_pub_.publish(msg);
   return true;
@@ -456,14 +508,24 @@ uint16_t Sunray_Control_Arbiter::make_position_target_type_mask(
     type_mask |= mavros_msgs::PositionTarget::IGNORE_VZ;
   }
 
-  type_mask |= mavros_msgs::PositionTarget::IGNORE_AFX;
-  type_mask |= mavros_msgs::PositionTarget::IGNORE_AFY;
-  type_mask |= mavros_msgs::PositionTarget::IGNORE_AFZ;
+  if (!output.is_channel_enabled(ControllerOutputMask::ACCELERATION) &&
+      !output.is_channel_enabled(ControllerOutputMask::FORCE)) {
+    type_mask |= mavros_msgs::PositionTarget::IGNORE_AFX;
+    type_mask |= mavros_msgs::PositionTarget::IGNORE_AFY;
+    type_mask |= mavros_msgs::PositionTarget::IGNORE_AFZ;
+  }
 
-  if (!output.is_channel_enabled(ControllerOutputMask::ATTITUDE)) {
+  if (output.is_channel_enabled(ControllerOutputMask::FORCE)) {
+    type_mask |= mavros_msgs::PositionTarget::FORCE;
+  }
+
+  if (!output.is_channel_enabled(ControllerOutputMask::YAW) &&
+      !output.is_channel_enabled(ControllerOutputMask::ATTITUDE)) {
     type_mask |= mavros_msgs::PositionTarget::IGNORE_YAW;
   }
-  type_mask |= mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+  if (!output.is_channel_enabled(ControllerOutputMask::YAW_RATE)) {
+    type_mask |= mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+  }
 
   return type_mask;
 }

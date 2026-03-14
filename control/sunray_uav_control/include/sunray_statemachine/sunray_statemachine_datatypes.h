@@ -14,6 +14,7 @@ struct SunrayFSM_ParamConfig {
 
   int controller_type{0};             
 	double controller_update_hz{100.0}; 
+  double supervisor_update_hz{10.0};
 
   std::string odom_topic_name{"/sunray/odom"};
   bool fuse_odom_to_px4{false};

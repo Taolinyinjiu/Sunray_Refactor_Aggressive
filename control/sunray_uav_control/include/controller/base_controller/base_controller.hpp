@@ -24,11 +24,14 @@
 #include <nav_msgs/Odometry.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
+#include <uav_control/Trajectory.h>
 
 #include <Eigen/Dense>
 
 #include "control_data_types/control_data_types.h"
+#include "control_msg_types/trajectory_point.hpp"
 #include "control_data_types/uav_state_estimate.hpp"
+#include "trajectory_buffer/trajectory_buffer.h"
 
 namespace uav_control {
 
@@ -69,6 +72,34 @@ public:
   virtual bool set_emergency_mode(void);
 
   /**
+   * @brief 切换到地面待机模式。
+   * @return true 切换成功；false 当前状态或输入不允许。
+   */
+  virtual bool set_off_mode(void);
+
+  /**
+   * @brief 配置降落策略参数。
+   * @param land_type 降落类型，0 为代码控制降落，1 为 PX4 AUTO.LAND。
+   * @param land_max_velocity 降落过程最大速度，单位 m/s。
+   * @return true 参数写入成功。
+   */
+  virtual bool configure_landing(uint8_t land_type, double land_max_velocity);
+
+  /**
+   * @brief 切换到悬停保持模式。
+   * @return true 切换成功；false 当前状态或输入不允许。
+   * @details 默认实现会锁存当前位置为保持点，并切换到 `HOVER`。
+   */
+  virtual bool set_hover_mode(void);
+
+  /**
+   * @brief 切换到轨迹/运动控制模式。
+   * @return true 切换成功；false 当前状态或参考输入不允许。
+   * @details 默认实现要求已存在有效轨迹参考，并切换到 `MOVE`。
+   */
+  virtual bool set_move_mode(void);
+
+  /**
    * @brief 更新无人机当前状态估计（里程计侧）。
    * @param current_state 当前状态估计。
    * @return true 写入成功。
@@ -101,13 +132,51 @@ public:
    * @param trajectory 期望轨迹点（位置/速度/加速度/yaw 等）。
    * @return true 写入成功。
    */
-  virtual bool set_trajectory(const TrajectoryPoint &trajectory);
+  virtual bool set_trajectory(const uav_control::TrajectoryPoint &trajectory);
+
+  /**
+   * @brief 设置多点轨迹参考输入。
+   * @param trajectory 轨迹消息，支持单点与多点。
+   * @return true 写入成功；false 轨迹非法。
+   */
+  virtual bool set_trajectory(const uav_control::Trajectory &trajectory);
 
   /**
    * @brief 获取控制器内部状态机状态。
    * @return 当前控制器状态。
    */
   virtual ControllerState get_controller_state() const;
+
+  /**
+   * @brief 获取当前锁存的参考轨迹点。
+   * @return 当前参考轨迹点。
+   */
+  virtual const uav_control::TrajectoryPoint &get_trajectory_reference() const;
+
+  /**
+   * @brief 是否已经锁存起飞 home 点。
+   * @return true 已锁存；false 尚未锁存。
+   */
+  virtual bool has_home_position() const;
+
+	/**
+   * @brief 更新home点，用于状态机返航接口
+   * @return true 修改成功；false 修改失败
+   */
+	virtual bool update_home_position(Eigen::Vector3d position) const ;
+	virtual bool update_home_position(Eigen::Vector3d position,double yaw) const ;
+
+  /**
+   * @brief 获取锁存的起飞 home 点。
+   * @return home 点位置。
+   */
+  virtual const Eigen::Vector3d &get_home_position() const;
+
+  /**
+   * @brief 当前降落策略是否要求切 PX4 AUTO.LAND。
+   * @return true 需要 PX4 自动降落；false 使用代码控制降落。
+   */
+  virtual bool should_use_px4_auto_land() const;
 
   /**
    * @brief 判定起飞任务是否完成。
@@ -130,6 +199,12 @@ public:
   virtual bool is_emergency_completed() const;
 
   /**
+   * @brief 判定多点轨迹是否已经执行完成。
+   * @return true 表示当前活动轨迹已到末端；false 表示尚未完成。
+   */
+  virtual bool is_trajectory_completed() const;
+
+  /**
    * @brief 控制器通用就绪状态检查。
    * @return true 控制器已就绪；false 控制器还未就绪。
    * @details 建议覆盖检查项包括参数合法性、输入时效性、状态有效性等。
@@ -144,6 +219,9 @@ public:
   virtual ControllerOutput update(void) = 0;
 
 protected:
+  void reset_trajectory_tracking();
+  bool update_trajectory_reference_from_buffer(const ros::Time &now);
+
   /** ---------------基本参数----------------- */
 
   /** @brief 控制器就绪状态。 */
@@ -165,6 +243,9 @@ protected:
 
   /** @brief 地面参考高度是否已初始化。 */
   bool ground_reference_initialized_ = false;
+
+  /** @brief 起飞 home 点是否已锁存。 */
+  bool home_position_initialized_ = false;
 
   /** ---------------起飞参数----------------- */
   /** @brief 起飞状态上下文 */
@@ -230,9 +311,43 @@ protected:
   /** @brief 降落稳定区间最近保持时间戳。 */
   ros::Time land_holdkeep_time_ = ros::Time(0);
 
+  /** @brief 降落阶段锁存的偏航角（rad）。 */
+  double land_yaw_ = 0.0;
+
+  /** @brief 末段降落的 XY 速度控制比例系数。 */
+  double land_xy_kp_ = 1.0;
+
+  /** @brief 末段降落的 XY 最大修正速度（m/s）。 */
+  double land_max_velocity_xy_mps_ = 0.5;
+
+  /** @brief 低速触地判定的速度阈值（m/s）。 */
+  double land_touchdown_velocity_threshold_mps_ = 0.1;
+
+  /** @brief 低速触地判定所需持续时间（s）。 */
+  double land_touchdown_velocity_hold_time_s_ = 1.0;
+
+  /** @brief 启用低速触地判定的近地高度阈值（m）。 */
+  double land_touchdown_height_threshold_m_ = 0.15;
+
+  /** @brief 检测到触地后继续下压的速度（m/s）。 */
+  double land_touchdown_downpress_speed_mps_ = 0.2;
+
+  /** @brief 检测到触地后继续下压的持续时间（s）。 */
+  double land_touchdown_downpress_time_s_ = 1.0;
+
+  /** @brief “近地低速”开始时间戳。 */
+  ros::Time land_low_velocity_start_time_ = ros::Time(0);
+
+  /** @brief 首次判定触地的时间戳。 */
+  ros::Time land_touchdown_detected_time_ = ros::Time(0);
+
   /** ---------------运动参数----------------- */
   /** @brief 当前控制参考轨迹点。 */
-  TrajectoryPoint trajectory_;
+  uav_control::TrajectoryPoint trajectory_;
+  TrajectoryBufferManager trajectory_buffer_{};
+  bool trajectory_tracking_enabled_{false};
+  bool trajectory_completed_{false};
+  uint32_t next_trajectory_id_{1U};
 
   /** @brief 控制器内部状态机当前状态。 */
   ControllerState controller_state_ = ControllerState::UNDEFINED;
