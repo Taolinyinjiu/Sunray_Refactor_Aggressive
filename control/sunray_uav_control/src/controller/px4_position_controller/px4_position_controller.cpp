@@ -69,6 +69,7 @@ ControllerOutput Position_Controller::update(void) {
   case ControllerState::MOVE:
     return handle_move_state();
   case ControllerState::LAND:
+  case ControllerState::EMERGENCY_LAND:
     return handle_land_state();
   default:
     return ControllerOutput();
@@ -90,7 +91,9 @@ void Position_Controller::reset_takeoff_context_if_needed() {
 
 void Position_Controller::reset_land_context_if_needed() {
   // 如果当前状态不为LAND状态，但是LAND标识符又指示初始化了，说明当前已经结束了LAND阶段，需要重置LAND参数
-  if (controller_state_ != ControllerState::LAND && land_initialized_) {
+  if (controller_state_ != ControllerState::LAND &&
+      controller_state_ != ControllerState::EMERGENCY_LAND &&
+      land_initialized_) {
     // 重置降落上下文标识
     land_initialized_ = false;
     // 清空时间参数
@@ -260,6 +263,10 @@ ControllerOutput Position_Controller::handle_hover_state() {
   const TrajectoryPointReference trajectory_ref(trajectory_);
   temp_output.channel_enable(ControllerOutputMask::POSITION);
   temp_output.position = trajectory_ref.position;
+  if (trajectory_ref.is_field_enabled(TrajectoryPointReference::Field::YAW)) {
+    temp_output.channel_enable(ControllerOutputMask::YAW);
+    temp_output.yaw = trajectory_ref.heading;
+  }
   return temp_output;
 }
 
@@ -375,11 +382,6 @@ ControllerOutput Position_Controller::handle_land_state() {
     }
 
     temp_output.velocity.z() = -std::abs(land_touchdown_downpress_speed_mps_);
-    if ((now - land_touchdown_detected_time_).toSec() >=
-        land_touchdown_downpress_time_s_) {
-      controller_state_ = ControllerState::OFF;
-      temp_output.velocity.setZero();
-    }
     return temp_output;
   }
 

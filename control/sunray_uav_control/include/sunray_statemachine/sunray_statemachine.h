@@ -130,6 +130,17 @@ private:
   bool build_return_target_locked(uav_control::TrajectoryPoint *target);
   bool is_position_target_reached_locked() const;
   bool is_return_target_reached_locked() const;
+  void update_px4_landed_hold_locked(SunrayState state, bool px4_landed,
+                                     const ros::Time &now);
+  bool is_px4_landed_hold_satisfied_locked(const ros::Time &now) const;
+  double get_px4_landed_hold_elapsed_s_locked(const ros::Time &now) const;
+  void update_controller_touchdown_hold_locked(SunrayState state,
+                                               bool touchdown_detected,
+                                               const ros::Time &now);
+  bool is_controller_touchdown_hold_satisfied_locked(
+      const ros::Time &now) const;
+  double get_controller_touchdown_hold_elapsed_s_locked(
+      const ros::Time &now) const;
   void publish_fsm_state();
 		// 控制器更新函数，包含（控制器里程计注入+控制器期望位置更新+控制器输出量更新）
   void controller_update_timer_cb(const ros::TimerEvent &);
@@ -166,6 +177,7 @@ private:
    * @return true 当前已满足；false 尚未满足。# 
    */
   bool ensure_offboard_and_arm();
+  bool ensure_disarm();
   bool ensure_auto_land_mode();
   void load_control_source_policies(ros::NodeHandle &cfg_nh);
   bool accept_control_meta_locked(const uav_control::ControlMeta &meta,
@@ -298,6 +310,9 @@ private:
     bool active_return_target_valid_{false};
     bool land_after_return_pending_{false};
     ros::Time return_hover_start_time_{};
+    ros::Time px4_landed_hold_start_time_{};
+    ros::Time controller_touchdown_hold_start_time_{};
+    double px4_landed_hold_required_s_{3.0};
     std::map<uint8_t, ControlSourcePolicy> control_source_policies_{};
     ActiveControlSource active_control_source_{};
 };

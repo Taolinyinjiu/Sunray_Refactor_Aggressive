@@ -15,18 +15,23 @@ int main(int argc, char **argv) {
     return sunray_demo::fail(tag, "takeoff");
   }
 
-  const Eigen::Vector3d origin = robot_group.raw_helper().get_uav_position();
   ros::Duration(1.0).sleep();
+  const Eigen::Vector3d origin = robot_group.raw_helper().get_uav_position();
+  const double initial_yaw = robot_group.raw_helper().get_uav_yaw_rad();
 
-  const Eigen::Vector3d start = origin+Eigen::Vector3d(-1,1,0);
+  const Eigen::Vector3d start = origin + Eigen::Vector3d(-1, 1, 0);
   ROS_INFO("[%s] move_to_square_start", tag);
-  if (!robot_group.move_to(start, 0.0).wait_for_completed()) {
+  if (!robot_group.move_to(start, initial_yaw).wait_for_completed()) {
     return sunray_demo::fail(tag, "move_to_square_start");
   }
 
+  std::vector<std::pair<Eigen::Vector3d, double>> square;
+  for (const auto &point : sunray_demo::square_waypoints(origin)) {
+    square.emplace_back(point, initial_yaw);
+  }
+
   ROS_INFO("[%s] draw_square", tag);
-  if (!robot_group.raw_helper().set_position_list_block(
-          sunray_demo::square_waypoints(origin))) {
+  if (!robot_group.raw_helper().set_position_list_block(square)) {
     return sunray_demo::fail(tag, "draw_square");
   }
 		

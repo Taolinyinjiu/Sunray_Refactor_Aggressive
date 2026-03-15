@@ -66,8 +66,10 @@ struct SunrayFSM_ParamConfig {
 struct OffboardRetryConfig {
   ros::Time last_set_mode_req_time{};
   ros::Time last_arm_req_time{};
+  ros::Time last_disarm_req_time{};
   double set_mode_retry_interval_s{1.0};
   double arm_retry_interval_s{1.0};
+  double disarm_retry_interval_s{1.0};
 };
 
 

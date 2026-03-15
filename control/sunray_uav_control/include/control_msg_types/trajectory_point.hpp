@@ -32,6 +32,16 @@ inline bool has_nonzero_quaternion(const Eigen::Quaterniond &q,
          std::abs(q.y()) > eps || std::abs(q.z()) > eps;
 }
 
+inline double normalize_angle_rad(double angle) {
+  while (angle > M_PI) {
+    angle -= 2.0 * M_PI;
+  }
+  while (angle < -M_PI) {
+    angle += 2.0 * M_PI;
+  }
+  return angle;
+}
+
 } // namespace trajectory_point_detail
 
 struct TrajectoryPointReference {
@@ -73,7 +83,7 @@ struct TrajectoryPointReference {
         angular_acceleration(geometryToEigen(msg.angular_acceleration)),
         angular_jerk(geometryToEigen(msg.angular_jerk)),
         angular_snap(geometryToEigen(msg.angular_snap)),
-        heading(msg.heading),
+        heading(trajectory_point_detail::normalize_angle_rad(msg.heading)),
         heading_rate(msg.heading_rate),
         heading_acceleration(msg.heading_acceleration),
         valid_mask(msg.valid_mask),
@@ -225,7 +235,7 @@ struct TrajectoryPointReference {
   }
 
   void set_yaw(double value) {
-    heading = value;
+    heading = trajectory_point_detail::normalize_angle_rad(value);
     channel_enable(Field::HEADING);
   }
 

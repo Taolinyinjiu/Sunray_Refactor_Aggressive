@@ -32,6 +32,10 @@ private:
     double position_integral_start_error_xy_m{0.2};
     double position_integral_start_error_z_m{1.0};
     double min_command_thrust{0.1};
+    double land_near_ground_speed_scale{1.5};
+    double land_reference_margin_m{0.05};
+    double land_near_ground_thrust_margin{0.04};
+    double land_touchdown_thrust_margin{0.10};
   };
 
   void reset_takeoff_context_if_needed();
@@ -44,6 +48,10 @@ private:
       bool allow_xy_integral);
   ControllerOutput solve_attitude_thrust(const DesiredState &desired_state,
                                          bool allow_xy_integral);
+  double compute_land_thrust_cap(bool near_ground,
+                                 bool touchdown_latched) const;
+  void apply_land_thrust_shaping(ControllerOutput *output, bool near_ground,
+                                 bool touchdown_latched) const;
 
   ControllerOutput handle_undefined_state();
   ControllerOutput handle_off_state();

@@ -7,9 +7,9 @@ uav_id: 1
 # 无人机质量
 mass_kg: 0.96
 # 重力加速度
-gravity: 0.98
+gravity: 9.8
 # 控制器类型 0:px4_position_controller 1:px4_velocity_controller 2:sunray_attitude_controller 3:rl_raptor_controller
-controller_types: 0
+controller_types: 2
 # 控制器更新频率(Hz)
 controller_update_frequency: 100
 # 状态机低频监督循环频率(Hz)
@@ -63,7 +63,7 @@ takeoff_with_code: true
 check_flip: false
 # 最大倾斜角度(角度制)
 tilt_angle_max: 20
-# -------------------起飞降落参数-----------------------
+# -------------------起飞降落参数-----------------------z
 # 相对当前位置的起飞高度(米)
 takeoff_relative_height: 0.6
 # 起飞过程中的最大速度(m/s)
@@ -72,6 +72,17 @@ takeoff_max_velocity: 0.5
 land_type: 0
 # 降落过程中的最大速度
 land_max_velocity: 0.5
+# -------------------Helper 阻塞接口等待参数-----------------------
+# 起飞阻塞接口等待 FSM 进入 HOVER 的超时时间
+takeoff_wait_s: 30.0
+# 单点/返航中间段等阻塞接口的默认等待时间
+move_wait_s: 30.0
+# 降落/返航阻塞接口等待 FSM 完成的超时时间
+land_wait_s: 30.0
+# FSM 已完成后，额外等待 PX4 landed/disarmed 确认的时间
+land_confirm_wait_s: 3.0
+# Helper 内部轮询等待频率
+wait_poll_hz: 20.0
 # -------------------电子围栏参数-----------------------
 # 使用ROS标准右手系，X正方向超机头前方，Y正方向朝机头左侧，Z轴朝上
 electronic_fence:
@@ -140,6 +151,8 @@ px4_velocity_controller_gains:
 # ----------sunray_attitude_controller---------------
 sunray_attitude_controller:
   hover_percent: 0.37
+  # 姿态-推力输出的最小推力，需允许降落末段进入 0.0x 区间
+  min_command_thrust: 0.02
   pxy_int_max: 10.0
   pz_int_max: 10.0
   Kp_xy: 3.
@@ -148,6 +161,26 @@ sunray_attitude_controller:
   Kv_z: 3.0
   Kvi_xy: 0.3
   Kvi_z: 0.3
+  # 降落阶段 XY 保持比例系数
+  land_xy_kp: 1.0
+  # 降落阶段 XY 最大修正速度(m/s)
+  land_max_velocity_xy_mps: 0.5
+  # 近地低速触地检测阈值
+  land_touchdown_velocity_threshold_mps: 0.1
+  land_touchdown_velocity_hold_time_s: 1.0
+  # 进入近地末段的高度阈值(m)
+  land_touchdown_height_threshold_m: 0.15
+  # 触地/近地末段的增强下压速度(m/s)
+  land_touchdown_downpress_speed_mps: 0.35
+  land_touchdown_downpress_time_s: 1.0
+  # 触地短暂收尾阶段相对常规下降速度的放大倍数
+  land_near_ground_speed_scale: 1.6
+  # z参考允许略低于地面的偏置，用于抵消地效(m)
+  land_reference_margin_m: 0.05
+  # 进入近地末段后，随高度连续增加的推力压低裕度
+  land_near_ground_thrust_margin: 0.04
+  # 触地锁存后，相对悬停油门额外压低的更强推力裕度
+  land_touchdown_thrust_margin: 0.10
 
 # ----------rl_raptor_controller---------------
 # 基本的思路是修改px4代码，uorb消息 -> mavlink -> mavros消息 <- sunray_control

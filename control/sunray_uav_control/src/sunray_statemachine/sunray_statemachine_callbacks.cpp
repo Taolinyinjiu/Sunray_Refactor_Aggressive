@@ -163,7 +163,9 @@ void Sunray_StateMachine::velocity_cmd_envelope_cb(
     traj_ref.set_velocity(Eigen::Vector3d(msg->payload.target_linear_velocity.x,
                                           msg->payload.target_linear_velocity.y,
                                           msg->payload.target_linear_velocity.z));
-    traj_ref.set_yaw_rate(msg->payload.target_angular_velocity.z);
+    if (std::abs(msg->payload.target_angular_velocity.z) > 1e-6) {
+      traj_ref.set_yaw_rate(msg->payload.target_angular_velocity.z);
+    }
     traj = traj_ref.toRosMessage();
     (void)sunray_controller_->set_trajectory(traj);
     update_active_control_source_locked(msg->meta,

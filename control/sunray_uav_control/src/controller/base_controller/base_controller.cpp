@@ -5,6 +5,60 @@
 
 namespace uav_control {
 
+namespace {
+
+double yaw_from_quaternion(const Eigen::Quaterniond &q) {
+  const double siny_cosp = 2.0 * (q.w() * q.z() + q.x() * q.y());
+  const double cosy_cosp = 1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z());
+  return std::atan2(siny_cosp, cosy_cosp);
+}
+
+bool is_valid_quaternion(const Eigen::Quaterniond &q) {
+  return std::isfinite(q.w()) && std::isfinite(q.x()) && std::isfinite(q.y()) &&
+         std::isfinite(q.z()) && q.norm() > 1e-9;
+}
+
+bool has_yaw_angle_reference(const TrajectoryPointReference &ref) {
+  return ref.is_field_enabled(TrajectoryPointReference::Field::YAW) ||
+         ref.is_field_enabled(TrajectoryPointReference::Field::ORIENTATION);
+}
+
+bool has_yaw_dynamic_reference(const TrajectoryPointReference &ref) {
+  return ref.is_field_enabled(TrajectoryPointReference::Field::YAW_RATE) ||
+         ref.is_field_enabled(TrajectoryPointReference::Field::YAW_ACC);
+}
+
+void lock_current_yaw_if_missing(TrajectoryPointReference *ref,
+                                 const UAVStateEstimate &state) {
+  if (!ref || !state.isValid() || !is_valid_quaternion(state.orientation)) {
+    return;
+  }
+  if (has_yaw_angle_reference(*ref) || has_yaw_dynamic_reference(*ref)) {
+    return;
+  }
+  ref->set_yaw(yaw_from_quaternion(state.orientation));
+}
+
+void preserve_or_lock_hover_yaw(TrajectoryPointReference *target,
+                                const TrajectoryPointReference &previous,
+                                const UAVStateEstimate &state) {
+  if (!target) {
+    return;
+  }
+  if (previous.is_field_enabled(TrajectoryPointReference::Field::YAW)) {
+    target->set_yaw(previous.heading);
+    return;
+  }
+  if (previous.is_field_enabled(TrajectoryPointReference::Field::ORIENTATION) &&
+      is_valid_quaternion(previous.orientation)) {
+    target->set_yaw(yaw_from_quaternion(previous.orientation));
+    return;
+  }
+  lock_current_yaw_if_missing(target, state);
+}
+
+} // namespace
+
 /**
  * @brief 切换控制器到起飞模式。
  *
@@ -186,9 +240,15 @@ bool Base_Controller::set_hover_mode() {
 
   reset_trajectory_tracking();
   trajectory_completed_ = false;
+  TrajectoryPointReference previous_ref(trajectory_);
+  if (previous_ref.valid_mask ==
+      static_cast<uint32_t>(TrajectoryPointReference::Field::UNDEFINED)) {
+    previous_ref.infer_valid_mask_from_nonzero();
+  }
   TrajectoryPointReference trajectory_ref;
   trajectory_ref.clear_all();
   trajectory_ref.set_position(uav_current_state_.position);
+  preserve_or_lock_hover_yaw(&trajectory_ref, previous_ref, uav_current_state_);
   trajectory_ = trajectory_ref.toRosMessage();
   controller_state_ = ControllerState::HOVER;
   return true;
@@ -300,13 +360,13 @@ bool Base_Controller::set_trajectory(
     const uav_control::TrajectoryPoint &trajectory) {
   reset_trajectory_tracking();
   trajectory_completed_ = false;
-  trajectory_ = trajectory;
-  TrajectoryPointReference trajectory_ref(trajectory_);
+  TrajectoryPointReference trajectory_ref(trajectory);
   if (trajectory_ref.valid_mask ==
       static_cast<uint32_t>(TrajectoryPointReference::Field::UNDEFINED)) {
     trajectory_ref.infer_valid_mask_from_nonzero();
-    trajectory_ = trajectory_ref.toRosMessage();
   }
+  lock_current_yaw_if_missing(&trajectory_ref, uav_current_state_);
+  trajectory_ = trajectory_ref.toRosMessage();
   return true;
 }
 
@@ -322,9 +382,20 @@ bool Base_Controller::set_trajectory(const uav_control::Trajectory &trajectory) 
   reset_trajectory_tracking();
   trajectory_completed_ = false;
 
+  uav_control::Trajectory normalized_trajectory = trajectory;
+  for (auto &point : normalized_trajectory.points) {
+    TrajectoryPointReference point_ref(point);
+    if (point_ref.valid_mask ==
+        static_cast<uint32_t>(TrajectoryPointReference::Field::UNDEFINED)) {
+      point_ref.infer_valid_mask_from_nonzero();
+    }
+    lock_current_yaw_if_missing(&point_ref, uav_current_state_);
+    point = point_ref.toRosMessage();
+  }
+
   const ros::Time now = ros::Time::now();
   const uint32_t fallback_id = next_trajectory_id_++;
-  if (!trajectory_buffer_.push_pending(trajectory, now, fallback_id)) {
+  if (!trajectory_buffer_.push_pending(normalized_trajectory, now, fallback_id)) {
     return false;
   }
 
@@ -333,9 +404,10 @@ bool Base_Controller::set_trajectory(const uav_control::Trajectory &trajectory) 
     TrajectoryPointReference hold_ref;
     hold_ref.clear_all();
     hold_ref.set_position(uav_current_state_.position);
+    lock_current_yaw_if_missing(&hold_ref, uav_current_state_);
     trajectory_ = hold_ref.toRosMessage();
   } else {
-    TrajectoryPointReference first_ref(trajectory.points.front());
+    TrajectoryPointReference first_ref(normalized_trajectory.points.front());
     if (first_ref.valid_mask ==
         static_cast<uint32_t>(TrajectoryPointReference::Field::UNDEFINED)) {
       first_ref.infer_valid_mask_from_nonzero();
@@ -414,6 +486,18 @@ bool Base_Controller::is_land_completed() const {
   if (controller_state_ == ControllerState::OFF)
     return true;
   return false;
+}
+
+bool Base_Controller::is_touchdown_detected() const {
+  return !land_touchdown_detected_time_.isZero();
+}
+
+double Base_Controller::get_touchdown_elapsed_s(const ros::Time &now) const {
+  if (land_touchdown_detected_time_.isZero() ||
+      now < land_touchdown_detected_time_) {
+    return 0.0;
+  }
+  return (now - land_touchdown_detected_time_).toSec();
 }
 
 /**

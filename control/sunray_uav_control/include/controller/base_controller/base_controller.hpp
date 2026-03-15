@@ -193,6 +193,20 @@ public:
   virtual bool is_land_completed() const;
 
   /**
+   * @brief 控制器侧是否已经锁存“触地”。
+   * @return true 表示控制器根据自身判据认为已触地；false 表示尚未触地。
+   * @note 该接口用于在 PX4 landed_state 缺失时提供收尾兜底，不等价于最终任务完成。
+   */
+  virtual bool is_touchdown_detected() const;
+
+  /**
+   * @brief 获取控制器侧触地锁存已持续的时长。
+   * @param now 当前时间。
+   * @return 若尚未触地则返回 0。
+   */
+  virtual double get_touchdown_elapsed_s(const ros::Time &now) const;
+
+  /**
    * @brief 判定紧急降落任务是否完成。
    * @return true 表示完成；false 表示未完成。
    */
