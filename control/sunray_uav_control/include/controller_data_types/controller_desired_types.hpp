@@ -10,7 +10,8 @@
  *		2.1 对于轨迹跟踪控制器，高阶轨迹很合适，比如位置控制、速度-位置级联、微分平坦控制、几何控制，这些控制器天然就吃 pos/vel/acc，有些还会用 jerk，所以用高阶轨迹做统一输入很舒服
  *		2.2 对于内环或者非轨迹控制器，比如姿态控制器，角速度控制器，推力分配控制器，他们的输入量更像是q/bodyrate/thrust，高阶轨迹只能作为他们的参考，而不是本质的输入
  *		2.3 综上，我们认为高阶轨迹作为参考层次，每个控制器从参考层映射到自己的输入中去，也就是从高阶轨迹总取出自己所需要的那部分
- *	3. 选择使用微分平坦轨迹作为后续所有控制器的参考输入，也就是期望状态，并修改命名，将Desired_State_t修改为FlatTrajectoryPoint 
+ *	3. 由于后续我们并不准备实现SE3 Control以及对应的求解器，因此选择使用微分平坦轨迹作为后续所有控制器的参考输入，也就是期望状态，并修改命名，将Desired_State_t修改为FlatTrajectoryPoint 
+ *  4. 使用命名空间包裹，和sunray_uav_control现有语义一致
  *
  * @version 0.1
  * @date 2026-03-16
@@ -22,6 +23,8 @@
 #pragma
 
 #include <Eigen/Dense>
+
+namespace controller_data_types {
 
 // FlatTrajectoryPoint 各字段的有效位定义，
 enum FlatTrajectoryField : uint32_t {
@@ -47,3 +50,5 @@ struct FlatTrajectoryPoint {
   // 用于区分“字段未提供”和“字段有效但数值恰好为 0”
   uint32_t valid_fields = kPositionValid | kYawValid;
 };
+
+} // namespace controller_data_types
