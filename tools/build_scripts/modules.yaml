@@ -25,6 +25,11 @@ modules:
     source_path: "common/sunray_srvs"
     build_path: "build/sunray_srvs"
     dependencies: []
+  sunray_common:
+    description: "Sunray 通用函数库"
+    source_path: "common/sunray_common"
+    build_path: "build/sunray_common"
+    dependencies: []
   # Sunray 重构中的demo
   px4_web_api_demo:
     description: "Sunray 重构中的测试demo"

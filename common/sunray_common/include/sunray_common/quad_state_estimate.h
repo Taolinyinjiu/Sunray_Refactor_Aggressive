@@ -1,6 +1,15 @@
+/**
+ * @file quad_state_estimate.h
+ * @brief 本文件旨在提供一个辅助结构体，快速的对nav_msgs::Odometry类型的ros消息进行解析并转换为Eigen类型数据
+ * @author Taolinyinjiu@YunDrone Tech (sirui@yundrone.com)
+ * @date 2026-03-17
+ * @version 0.1
+ * 
+ */
+
 #pragma once
 
-#include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include <nav_msgs/Odometry.h>
 #include <ros/time.h>
 
@@ -11,20 +20,14 @@ struct QuadStateEstimate {
 
   QuadStateEstimate();
   QuadStateEstimate(const nav_msgs::Odometry &state_estimate_msg);
-  virtual ~QuadStateEstimate();
+	~QuadStateEstimate() = default;
 
   nav_msgs::Odometry toRosMessage() const;
-  void transformVelocityToWorldFrame();
+	// 将速度从机体系转换为惯性系
+  void transform_VelocityToWorldFrame();
   bool isValid() const;
 
   ros::Time timestamp;
-  enum class CoordinateFrame {
-    INVALID,
-    WORLD,
-    OPTITRACK,
-    VISION,
-    LOCAL
-  } coordinate_frame;
   Eigen::Vector3d position;
   Eigen::Vector3d velocity;
   Eigen::Quaterniond orientation;
