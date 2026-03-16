@@ -1,0 +1,4 @@
+If:
+  PathMatch: (.*/)?control/sunray_uav_control/.*
+CompileFlags:
+  CompilationDatabase: build/sunray_uav_control
