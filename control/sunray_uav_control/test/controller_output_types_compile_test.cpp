@@ -1,7 +1,7 @@
 /**
  * @file controller_output_types_compile_test.cpp
- * @brief 为前期的代码补全提供编译支持
- * @author Taolinyinjiu (qwer200413@163.com)
+ * @brief 
+ * @author Taolinyinjiu@YunDrone Tech (sirui@yundrone.com)
  * @date 2026-03-16
  * @version 0.1
  * 

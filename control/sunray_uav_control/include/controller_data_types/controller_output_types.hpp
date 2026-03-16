@@ -1,9 +1,19 @@
 /**
  * @file controller_output_types.hpp
- * @author Taolinyinjiu @YunDrone Tech (taolinyinjiu@foxgmail.com)
- * @brief Sunray 控制器输出边界定义。
+ * @author Taolinyinjiu @YunDrone Tech
+ * @brief 说明 Sunray 控制器输出接口的边界设计。
+ * @details
+ * 在 2026-03-16 的重构讨论中，项目确定了两类控制器的输出能力边界：
+ * - `px4_original_controller` 提供位置、速度、轨迹和自定义接口，
+ *   其中自定义接口用于按 PX4 setpoint mask 进行转发。
+ * - `sunray_attitude_controller` 提供位置和轨迹接口。
  *
- * 控制器对状态机只暴露两类最终输出：
+ * 之所以做这样的边界划分，是因为姿态-推力接口控制的是加速度/力，而不是速度本身。
+ * 如果没有速度误差反馈，系统只能根据给定姿态和推力飞行，无法保证收敛到目标速度。
+ * 因此，控制器能够提供哪些接口，取决于其闭环中使用了哪些反馈量。
+ * 对于姿态控制器而言，其反馈量是位置和姿态，所以只适合对外提供位置和轨迹接口。
+ *
+ * 基于上述边界，状态机后续需要根据控制器输出分别处理两类更新路径：
  * - `setpoint_raw/local`
  * - `setpoint_raw/attitude`
  *
@@ -91,4 +101,4 @@ struct AttitudeSetpointOutput {
   double thrust = 0.0;
 };
 
-}  // namespace controller_data_types
+} // namespace controller_data_types
