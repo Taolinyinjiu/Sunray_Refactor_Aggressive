@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>sunray_common</name>
+  <version>0.1.0</version>
+  <description>Sunray common utilities.</description>
+
+  <maintainer email="sirui@yundrone.com">YunDrone Tech</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+</package>

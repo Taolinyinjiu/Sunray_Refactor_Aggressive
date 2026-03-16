@@ -15,6 +15,16 @@ modules:
     source_path: "common/px4_bridge"
     build_path: "build/px4_bridge"
     dependencies: []
+  sunray_msgs:
+    description: "Sunray 消息定义包"
+    source_path: "common/sunray_msgs"
+    build_path: "build/sunray_msgs"
+    dependencies: []
+  sunray_srvs:
+    description: "Sunray 服务定义包"
+    source_path: "common/sunray_srvs"
+    build_path: "build/sunray_srvs"
+    dependencies: []
   # Sunray 重构中的demo
   px4_web_api_demo:
     description: "Sunray 重构中的测试demo"
@@ -76,7 +86,7 @@ groups:
   # common测试
   common_test:
     description: "common测试"
-    modules: ["px4_bridge", "px4_web_api_demo", "px4_web_ui_demo"]
+    modules: ["px4_bridge", "sunray_msgs", "sunray_srvs"]
 
   # control测试
   control_test:
