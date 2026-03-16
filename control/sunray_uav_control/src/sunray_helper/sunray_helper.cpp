@@ -23,6 +23,7 @@
 
 namespace {
 constexpr double kMinTrajectorySegmentTimeS = 0.1;
+constexpr double kTrajectoryMetaTimeoutMarginS = 1.0;
 
 std::string normalize_ns(const std::string &ns) {
   if (!ns.empty() && ns.front() == '/') {
@@ -228,6 +229,21 @@ uav_control::ControlMeta make_helper_control_meta() {
   meta.allow_preempt = true;
   meta.replace_same_source = true;
   return meta;
+}
+
+double compute_trajectory_meta_timeout_s(const uav_control::Trajectory &trajectory,
+                                         const ros::Time &meta_stamp) {
+  if (trajectory.points.empty()) {
+    return 0.0;
+  }
+
+  const ros::Time effective_start =
+      trajectory.header.stamp.isZero() ? meta_stamp : trajectory.header.stamp;
+  const double start_delay_s =
+      std::max(0.0, (effective_start - meta_stamp).toSec());
+  const double duration_s =
+      std::max(0.0, trajectory.points.back().time_from_start.toSec());
+  return start_delay_s + duration_s + kTrajectoryMetaTimeoutMarginS;
 }
 
 double sanitize_nominal_speed(double speed_mps) {
@@ -1277,6 +1293,8 @@ bool Sunray_Helper::set_trajectory_async(
   if (envelope.payload.header.stamp.isZero()) {
     envelope.payload.header.stamp = ros::Time::now();
   }
+  envelope.meta.timeout = ros::Duration(
+      compute_trajectory_meta_timeout_s(envelope.payload, envelope.meta.header.stamp));
   trajectory_envelope_pub_.publish(envelope);
 
   const uav_control::TrajectoryPointReference first_ref(trajectory.points.front());

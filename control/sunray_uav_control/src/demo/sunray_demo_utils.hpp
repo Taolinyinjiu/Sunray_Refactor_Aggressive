@@ -18,7 +18,7 @@ namespace sunray_demo {
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kNominalSpeedMps = 0.6;
-constexpr double kTimeoutMarginS = 5.0;
+constexpr double kTimeoutMarginS = 15.0;
 constexpr double kPositionToleranceM = 0.15;
 constexpr double kStatePollHz = 20.0;
 constexpr int kCircleSegments = 48;
@@ -184,7 +184,7 @@ inline bool run_trajectory(sunray_helper_fluent::Sunray_RobotGroup &robot_group,
                  trajectory.points.back().time_from_start.toSec() +
                      kTimeoutMarginS)
              .wait_for_completed() &&
-         wait_for_position(robot_group.raw_helper(), tail.position, 2.0);
+         wait_for_position(robot_group.raw_helper(), tail.position, 8.0);
 }
 
 inline int fail(const char *tag, const char *step) {

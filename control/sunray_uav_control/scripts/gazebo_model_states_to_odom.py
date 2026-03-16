@@ -19,7 +19,7 @@ def resolve_uav_ns():
         name = str(rospy.get_param("/uav_name"))
         uid = str(rospy.get_param("/uav_id"))
         return trim_leading_slash(name + uid)
-    return ""
+    return "uav1"
 
 
 class GazeboModelStatesToOdom:
