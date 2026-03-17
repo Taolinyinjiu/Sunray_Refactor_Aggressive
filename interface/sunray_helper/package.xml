@@ -11,6 +11,6 @@
   <depend>eigen</depend>
   <depend>nav_msgs</depend>
   <depend>roscpp</depend>
+  <depend>std_msgs</depend>
   <depend>sunray_common</depend>
 </package>
-

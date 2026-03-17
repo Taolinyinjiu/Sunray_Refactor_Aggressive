@@ -9,13 +9,14 @@ find_package(Eigen3 REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   roscpp
+  std_msgs
   sunray_common
 )
 
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES sunray_helper
-  CATKIN_DEPENDS nav_msgs roscpp sunray_common
+  CATKIN_DEPENDS nav_msgs roscpp std_msgs sunray_common
   DEPENDS EIGEN3
 )
 
@@ -75,4 +76,3 @@ install(TARGETS sunray_helper minimal_takeoff_example goto_waypoint_example
 install(DIRECTORY include/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
-

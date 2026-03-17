@@ -10,6 +10,7 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <optional>
 
 struct MovePoint {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
