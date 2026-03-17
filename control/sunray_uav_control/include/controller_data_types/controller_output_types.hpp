@@ -32,7 +32,7 @@
 namespace controller_data_types {
 
 /// `setpoint_raw/local` 使用的坐标系，与 MAVROS PositionTarget 保持一致。
-enum class LocalSetpointFrame : uint8_t {
+enum class Px4LocalFrame : uint8_t {
   kLocalNed = 1,
   kLocalOffsetNed = 7,
   kBodyNed = 8,
@@ -40,11 +40,11 @@ enum class LocalSetpointFrame : uint8_t {
 };
 
 /// 对应 `setpoint_raw/local` 的控制器输出。
-struct LocalSetpointOutput {
+struct Px4LocalSetpoint {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   /// 与 MAVROS PositionTarget::type_mask 对齐。
-  enum TypeMask : uint16_t {
+  enum Mask : uint16_t {
     kIgnorePx = 1u,
     kIgnorePy = 2u,
     kIgnorePz = 4u,
@@ -60,16 +60,16 @@ struct LocalSetpointOutput {
   };
 
   /// setpoint 中位置/速度/加速度字段的解释坐标系。
-  LocalSetpointFrame coordinate_frame = LocalSetpointFrame::kLocalNed;
+  Px4LocalFrame frame = Px4LocalFrame::kLocalNed;
   /// 指定哪些字段参与控制，哪些字段被忽略。
-  uint16_t type_mask = 0;
+  uint16_t mask = 0;
 
   /// 目标位置。
   Eigen::Vector3d position = Eigen::Vector3d::Zero();
   /// 目标速度。
   Eigen::Vector3d velocity = Eigen::Vector3d::Zero();
   /// 目标加速度，或在 `kForceSetpoint` 置位时表示目标力。
-  Eigen::Vector3d acceleration_or_force = Eigen::Vector3d::Zero();
+  Eigen::Vector3d accel_or_force = Eigen::Vector3d::Zero();
 
   /// 目标偏航角。
   double yaw = 0.0;
@@ -78,11 +78,11 @@ struct LocalSetpointOutput {
 };
 
 /// 对应 `setpoint_raw/attitude` 的控制器输出。
-struct AttitudeSetpointOutput {
+struct Px4AttitudeSetpoint {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   /// 与 MAVROS AttitudeTarget::type_mask 对齐。
-  enum TypeMask : uint8_t {
+  enum Mask : uint8_t {
     kIgnoreRollRate = 1u,
     kIgnorePitchRate = 2u,
     kIgnoreYawRate = 4u,
@@ -91,7 +91,7 @@ struct AttitudeSetpointOutput {
   };
 
   /// 指定姿态、角速度、推力中哪些字段参与控制。
-  uint8_t type_mask = 0;
+  uint8_t mask = 0;
 
   /// 目标姿态。
   Eigen::Quaterniond attitude = Eigen::Quaterniond::Identity();
