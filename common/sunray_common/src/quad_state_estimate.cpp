@@ -40,6 +40,17 @@ void QuadStateEstimate::transform_VelocityToWorldFrame() {
   velocity = orientation * velocity;
 }
 
+double QuadStateEstimate::getYaw() const {
+  const Eigen::Quaterniond normalized_orientation = orientation.normalized();
+  const double siny_cosp =
+      2.0 * (normalized_orientation.w() * normalized_orientation.z() +
+             normalized_orientation.x() * normalized_orientation.y());
+  const double cosy_cosp =
+      1.0 - 2.0 * (normalized_orientation.y() * normalized_orientation.y() +
+                   normalized_orientation.z() * normalized_orientation.z());
+  return std::atan2(siny_cosp, cosy_cosp);
+}
+
 bool QuadStateEstimate::isValid() const {
   if (std::isnan(position.norm())) {
     return false;

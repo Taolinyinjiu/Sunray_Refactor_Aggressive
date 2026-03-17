@@ -61,6 +61,14 @@ TEST(QuadStateEstimateTest, TransformVelocityToWorldFrameUsesOrientation) {
   EXPECT_NEAR(state.velocity.z(), 0.0, 1e-9);
 }
 
+TEST(QuadStateEstimateTest, GetYawReturnsHeadingFromOrientation) {
+  QuadStateEstimate state;
+  state.orientation =
+      Eigen::Quaterniond(Eigen::AngleAxisd(M_PI / 3.0, Eigen::Vector3d::UnitZ()));
+
+  EXPECT_NEAR(state.getYaw(), M_PI / 3.0, 1e-9);
+}
+
 TEST(QuadStateEstimateTest, ToRosMessagePreservesStateValues) {
   QuadStateEstimate state;
   state.timestamp = ros::Time(5.0);

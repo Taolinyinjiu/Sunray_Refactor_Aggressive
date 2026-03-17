@@ -25,6 +25,7 @@ struct QuadStateEstimate {
   nav_msgs::Odometry toRosMessage() const;
 	// 将速度从机体系转换为惯性系
   void transform_VelocityToWorldFrame();
+  double getYaw() const;
   bool isValid() const;
 
   ros::Time timestamp;
