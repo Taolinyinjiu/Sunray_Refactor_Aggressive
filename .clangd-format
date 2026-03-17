@@ -1,18 +1,36 @@
+# 以 LLVM 风格为基础
 BasedOnStyle: LLVM
+# 缩进 4 个空格
 IndentWidth: 4
+# 如果出现 tab，显示宽度按 4 算
 TabWidth: 4
+# 永远不用 tab
 UseTab: Never
+# 每行最长 100 列，超过会自动换行
 ColumnLimit: 100
+# 大括号跟在声明后面，不另起一行
 BreakBeforeBraces: Attach
+# 指针星号靠左
 PointerAlignment: Left
+# 不从现有代码推断指针对齐风格，强制使用靠左
 DerivePointerAlignment: false
+# 换行后的参数和括号后内容对齐
 AlignAfterOpenBracket: Align
+# 不允许短 if 写成一行
 AllowShortIfStatementsOnASingleLine: false
+# 只允许“空函数”写成一行
 AllowShortFunctionsOnASingleLine: Empty
+# 不允许短循环一行写完
 AllowShortLoopsOnASingleLine: false
+# 不鼓励把声明参数整批挪到下一行，会尽量让第一个参数留在函数名的那一行
 AllowAllParametersOfDeclarationOnNextLine: false
+# 函数声明参数换行时，不把多个参数硬塞在同一行
 BinPackParameters: false
+# 函数调用参数换行时，也不挤在一行里
 BinPackArguments: false
+# 保留原本 #include 的分组
 IncludeBlocks: Preserve
+# 不自动排序 #include
 SortIncludes: false
+# 行尾注释前保留两个空格
 SpacesBeforeTrailingComments: 2

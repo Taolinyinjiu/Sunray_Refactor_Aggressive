@@ -155,26 +155,6 @@ sunray_attitude_controller:
   Kv_z: 3.0
   Kvi_xy: 0.3
   Kvi_z: 0.3
-  # 降落阶段 XY 保持比例系数
-  land_xy_kp: 1.0
-  # 降落阶段 XY 最大修正速度(m/s)
-  land_max_velocity_xy_mps: 0.5
-  # 近地低速触地检测阈值
-  land_touchdown_velocity_threshold_mps: 0.1
-  land_touchdown_velocity_hold_time_s: 1.0
-  # 进入近地末段的高度阈值(m)
-  land_touchdown_height_threshold_m: 0.15
-  # 触地/近地末段的增强下压速度(m/s)
-  land_touchdown_downpress_speed_mps: 0.35
-  land_touchdown_downpress_time_s: 1.0
-  # 触地短暂收尾阶段相对常规下降速度的放大倍数
-  land_near_ground_speed_scale: 1.6
-  # z参考允许略低于地面的偏置，用于抵消地效(m)
-  land_reference_margin_m: 0.05
-  # 进入近地末段后，随高度连续增加的推力压低裕度
-  land_near_ground_thrust_margin: 0.04
-  # 触地锁存后，相对悬停油门额外压低的更强推力裕度
-  land_touchdown_thrust_margin: 0.10
 
 # ----------rl_raptor_controller---------------
 # 基本的思路是修改px4代码，uorb消息 -> mavlink -> mavros消息 <- sunray_control
