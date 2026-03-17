@@ -12,6 +12,7 @@
  *		2.3 综上，我们认为高阶轨迹作为参考层次，每个控制器从参考层映射到自己的输入中去，也就是从高阶轨迹总取出自己所需要的那部分
  *	3. 由于后续我们并不准备实现SE3 Control以及对应的求解器，因此选择使用微分平坦轨迹作为后续所有控制器的参考输入，也就是期望状态，并修改命名，将Desired_State_t修改为FlatTrajectoryPoint 
  *  4. 使用命名空间包裹，和sunray_uav_control现有语义一致
+		5. 由于引入了C++ 17的语法糖，因此可以不适用mask掩码来判断是否有值被填入
  *
  * @version 0.1
  * @date 2026-03-16
@@ -26,29 +27,17 @@
 
 namespace controller_data_types {
 
-// FlatTrajectoryPoint 各字段的有效位定义，
-enum FlatTrajectoryField : uint32_t {
-  kPositionValid = 1u << 0,     // position 字段有效
-  kVelocityValid = 1u << 1,     // velocity 字段有效
-  kAccelerationValid = 1u << 2, // acceleration 字段有效
-  kJerkValid = 1u << 3,         // jerk 字段有效
-  kYawValid = 1u << 4,          // yaw 字段有效
-  kYawRateValid = 1u << 5,      // yaw_rate 字段有效
-};
 // 单个时刻的平坦轨迹参考点，供高层轨迹跟踪控制器使用。
 struct FlatTrajectoryPoint {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  Eigen::Vector3d position = Eigen::Vector3d::Zero(); // 期望位置，世界坐标系
-  Eigen::Vector3d velocity = Eigen::Vector3d::Zero(); // 期望速度，世界坐标系
-  Eigen::Vector3d acceleration = Eigen::Vector3d::Zero(); // 期望加速度
-  Eigen::Vector3d jerk = Eigen::Vector3d::Zero();         // 期望加加速度
+  std::optional<Eigen::Vector3d> position;     // 期望位置，世界坐标系
+  std::optional<Eigen::Vector3d> velocity;     // 期望速度，世界坐标系
+  std::optional<Eigen::Vector3d> acceleration; // 期望加速度
+  std::optional<Eigen::Vector3d> jerk;         // 期望加加速度
 
-  double yaw = 0.0;      // 期望偏航角
-  double yaw_rate = 0.0; // 期望偏航角速度
-
-  // 用于区分“字段未提供”和“字段有效但数值恰好为 0”
-  uint32_t valid_fields = kPositionValid | kYawValid;
+  std::optional<double> yaw = 0.0;      // 期望偏航角
+  std::optional<double> yaw_rate = 0.0; // 期望偏航角速度
 };
 
 } // namespace controller_data_types
