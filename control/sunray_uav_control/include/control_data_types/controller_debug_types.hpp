@@ -42,48 +42,48 @@ namespace controller_data_types {
 
 /// 所有控制器都可复用的通用调试信息。
 struct ControllerDebugCommon {
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  std::optional<Eigen::Vector3d> position_error;
-  std::optional<Eigen::Vector3d> velocity_error;
-  std::optional<double> yaw_error;
-  std::optional<double> yaw_rate_error;
+    std::optional<Eigen::Vector3d> position_error;
+    std::optional<Eigen::Vector3d> velocity_error;
+    std::optional<double> yaw_error;
+    std::optional<double> yaw_rate_error;
 };
 
 /// 面向 `setpoint_raw/local` 输出路径的调试信息。
 struct Px4LocalControlDebug {
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  ControllerDebugCommon common;
+    ControllerDebugCommon common;
 
-  /// 误差反馈产生的修正加速度。
-  std::optional<Eigen::Vector3d> feedback_acceleration;
-  /// 限幅前的最终加速度指令。
-  std::optional<Eigen::Vector3d> commanded_acceleration;
-  /// 限幅后的实际采用加速度。
-  std::optional<Eigen::Vector3d> limited_acceleration;
+    /// 误差反馈产生的修正加速度。
+    std::optional<Eigen::Vector3d> feedback_acceleration;
+    /// 限幅前的最终加速度指令。
+    std::optional<Eigen::Vector3d> commanded_acceleration;
+    /// 限幅后的实际采用加速度。
+    std::optional<Eigen::Vector3d> limited_acceleration;
 
-  /// 最终给 local setpoint 的偏航与偏航角速度。
-  std::optional<double> commanded_yaw;
-  std::optional<double> commanded_yaw_rate;
+    /// 最终给 local setpoint 的偏航与偏航角速度。
+    std::optional<double> commanded_yaw;
+    std::optional<double> commanded_yaw_rate;
 };
 
 /// 面向 `setpoint_raw/attitude` 输出路径的调试信息。
 struct Px4AttitudeControlDebug {
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  ControllerDebugCommon common;
+    ControllerDebugCommon common;
 
-  std::optional<Eigen::Quaterniond> reference_attitude;
-  std::optional<Eigen::Quaterniond> feedback_attitude;
-  std::optional<Eigen::Vector3d> attitude_error;
+    std::optional<Eigen::Quaterniond> reference_attitude;
+    std::optional<Eigen::Quaterniond> feedback_attitude;
+    std::optional<Eigen::Vector3d> attitude_error;
 
-  std::optional<Eigen::Vector3d> reference_body_rate;
-  std::optional<Eigen::Vector3d> feedback_body_rate;
-  std::optional<Eigen::Vector3d> commanded_body_rate;
+    std::optional<Eigen::Vector3d> reference_body_rate;
+    std::optional<Eigen::Vector3d> feedback_body_rate;
+    std::optional<Eigen::Vector3d> commanded_body_rate;
 
-  std::optional<double> reference_thrust;
-  std::optional<double> commanded_thrust;
+    std::optional<double> reference_thrust;
+    std::optional<double> commanded_thrust;
 };
 
 }  // namespace controller_data_types

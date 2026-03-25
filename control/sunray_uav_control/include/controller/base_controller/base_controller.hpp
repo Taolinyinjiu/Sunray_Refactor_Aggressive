@@ -27,52 +27,51 @@
 namespace controller_data_types {
 // 构建输出结构体，包含输出控制量+debug结构体
 struct Px4LocalControlResult {
-  Px4LocalSetpoint command;
-  Px4LocalControlDebug debug;
+    Px4LocalSetpoint command;
+    Px4LocalControlDebug debug;
 };
 
 struct Px4AttitudeControlResult {
-  Px4AttitudeSetpoint command;
-  Px4AttitudeControlDebug debug;
+    Px4AttitudeSetpoint command;
+    Px4AttitudeControlDebug debug;
 };
 
-} // namespace controller_data_types
+}  // namespace controller_data_types
 
 class Px4LocalControlBase {
-public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  explicit Px4LocalControlBase(
-      ros::NodeHandle
-          &nh): nh_(nh) {} // 控制器的构造函数使用ros句柄，从ros参数空间中读取参数
-  virtual ~Px4LocalControlBase() = default;
-  // 我们希望控制器所提供的函数名尽可能的简单，函数接口尽可能的少，因此我们使用is_ready()函数用于表示，控制器是否做好了准备
-  // 这里的准备包括但不限于 读取参数，检查增益……
-  // 当返回值为true时状态机可以考虑执行任务
-  virtual bool is_ready() const;
+  public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    explicit Px4LocalControlBase(ros::NodeHandle& nh)
+        : nh_(nh) {}  // 控制器的构造函数使用ros句柄，从ros参数空间中读取参数
+    virtual ~Px4LocalControlBase() = default;
+    // 我们希望控制器所提供的函数名尽可能的简单，函数接口尽可能的少，因此我们使用is_ready()函数用于表示，控制器是否做好了准备
+    // 这里的准备包括但不限于 读取参数，检查增益……
+    // 当返回值为true时状态机可以考虑执行任务
+    virtual bool is_ready() const;
 
-  // 控制器计算输出函数，参数为 期望轨迹点，当前里程计，输出为控制器的输出
-  virtual controller_data_types::Px4LocalControlResult
-  calculateControl(const controller_data_types::FlatTrajectoryPoint &des,
-                   const sunray_common::QuadStateEstimate &odom);
+    // 控制器计算输出函数，参数为 期望轨迹点，当前里程计，输出为控制器的输出
+    virtual controller_data_types::Px4LocalControlResult
+    calculateControl(const controller_data_types::FlatTrajectoryPoint& des,
+                     const sunray_common::QuadStateEstimate& odom);
 
-protected:
-  ros::NodeHandle nh_;
+  protected:
+    ros::NodeHandle nh_;
 };
 
 class Px4AttitudeControlBase {
-public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  explicit Px4AttitudeControlBase(ros::NodeHandle &nh);
-  virtual ~Px4AttitudeControlBase() = default;
+  public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    explicit Px4AttitudeControlBase(ros::NodeHandle& nh);
+    virtual ~Px4AttitudeControlBase() = default;
 
-  virtual bool is_ready() const;
+    virtual bool is_ready() const;
 
-  // 控制器计算更新函数，参数为期望轨迹点，当前里程计，当前px4的imu输入，当前的px4_target输入
-  virtual controller_data_types::Px4AttitudeControlResult
-  calculateControl(const controller_data_types::FlatTrajectoryPoint &des,
-                   const sunray_common::QuadStateEstimate &odom,
-                   const sensor_msgs::Imu &imu);
+    // 控制器计算更新函数，参数为期望轨迹点，当前里程计，当前px4的imu输入，当前的px4_target输入
+    virtual controller_data_types::Px4AttitudeControlResult
+    calculateControl(const controller_data_types::FlatTrajectoryPoint& des,
+                     const sunray_common::QuadStateEstimate& odom,
+                     const sensor_msgs::Imu& imu);
 
-protected:
-  ros::NodeHandle nh_;
+  protected:
+    ros::NodeHandle nh_;
 };

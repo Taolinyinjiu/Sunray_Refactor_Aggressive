@@ -1,9 +1,0 @@
-bool use_takeoff_homepoint  # 使用起飞时记录的homepoint,如果该位为false，则使用下面指定的点位,注意z轴高度会被忽略，即强制为当前的高度
-geometry_msgs/Point target_position
-bool yaw_ctrl # 是否控制yaw角，如果不控制则以当前时刻的yaw角为降落时的yaw角
-float64 yaw	# 降落时的yaw角
-int32 land_type # land_type: 0=code land, 1=px4 auto land
-float64 land_max_velocity # 降落过程中的最大速度
----
-bool accepted
-string message
