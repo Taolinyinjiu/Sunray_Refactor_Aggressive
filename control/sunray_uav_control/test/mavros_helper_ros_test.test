@@ -1,0 +1,9 @@
+<launch>
+  <param name="/uav_name" value="/test_uav" />
+  <param name="/uav_id" value="1" />
+
+  <test test-name="mavros_helper_ros_test"
+        pkg="sunray_uav_control"
+        type="mavros_helper_ros_test"
+        time-limit="30.0" />
+</launch>

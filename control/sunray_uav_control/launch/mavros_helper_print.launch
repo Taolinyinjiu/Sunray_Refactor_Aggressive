@@ -1,0 +1,21 @@
+<launch>
+  <arg name="uav_name" default="/uav" />
+  <arg name="uav_id" default="1" />
+  <arg name="print_hz" default="1.0" />
+
+  <param name="/uav_name" value="$(arg uav_name)" />
+  <param name="/uav_id" value="$(arg uav_id)" />
+
+  <node pkg="sunray_uav_control"
+        type="mavros_helper_print_node"
+        name="mavros_helper_print_node"
+        output="screen">
+    <param name="print_hz" value="$(arg print_hz)" />
+    <param name="state" value="true" />
+    <param name="battery" value="true" />
+    <param name="ekf2_status" value="true" />
+    <param name="local_odom" value="true" />
+    <param name="uav_target_state" value="true" />
+    <param name="uav_control_handle" value="false" />
+  </node>
+</launch>

@@ -5,13 +5,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Eigen3 REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
+  geometry_msgs
+  mavros_msgs
+  nav_msgs
   roscpp
+  sensor_msgs
   sunray_common
 )
 
 catkin_package(
   INCLUDE_DIRS include
-  CATKIN_DEPENDS roscpp sunray_common
+  LIBRARIES sunray_uav_control_lib
+  CATKIN_DEPENDS geometry_msgs mavros_msgs nav_msgs roscpp sensor_msgs sunray_common
   DEPENDS EIGEN3
 )
 
@@ -21,7 +26,28 @@ include_directories(
   ${EIGEN3_INCLUDE_DIRS}
 )
 
+add_library(sunray_uav_control_lib
+  src/mavros_helper/mavros_helper.cpp
+)
+
+target_link_libraries(sunray_uav_control_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+
+add_executable(mavros_helper_print_node
+  src/mavros_helper/mavros_helper_print_node.cpp
+)
+
+target_link_libraries(mavros_helper_print_node
+  sunray_uav_control_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+
 if(CATKIN_ENABLE_TESTING)
+  find_package(rostest REQUIRED)
+
   catkin_add_gtest(base_controller_compile_test
     test/base_controller_compile_test.cpp
   )
@@ -41,16 +67,19 @@ if(CATKIN_ENABLE_TESTING)
       ${EIGEN3_LIBRARIES}
     )
   endif()
+
+  add_rostest_gtest(mavros_helper_ros_test
+    test/mavros_helper_ros_test.test
+    test/mavros_helper_ros_test.cpp
+  )
+  if(TARGET mavros_helper_ros_test)
+    target_link_libraries(mavros_helper_ros_test
+      sunray_uav_control_lib
+      ${catkin_LIBRARIES}
+      ${EIGEN3_LIBRARIES}
+    )
+  endif()
 endif()
-
-add_library(sunray_uav_control_lib
-  src/mavros_helper/mavros_helper.cpp
-)
-
-target_link_libraries(sunray_uav_control_lib
-  ${catkin_LIBRARIES}
-  ${EIGEN3_LIBRARIES}
-)
 
 install(DIRECTORY include/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
@@ -58,4 +87,16 @@ install(DIRECTORY include/
 
 install(DIRECTORY config/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
+)
+
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+)
+
+install(TARGETS
+  mavros_helper_print_node
+  sunray_uav_control_lib
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

@@ -20,7 +20,7 @@ MavrosHelper::MavrosHelper(ros::NodeHandle nh, MavrosHelper_ConfigList config_li
         throw std::runtime_error("missing param /uav_id");
     }
     // 拼接uav_ns
-    uav_ns = uav_name + "/" + std::to_string(uav_id);
+    uav_ns = uav_name + std::to_string(uav_id);
     // 本来设计了一个表，然后使用迭代器遍历的，但是想了一下，可读性没有直接用if高，所以还是用if吧
     // 首先还是要缓存一下这个config_list，这样做的好处是，提高结构体中的valid语义
     config_cache_ = config_list;
@@ -422,6 +422,7 @@ void MavrosHelper::mavros_estimator_callback(const mavros_msgs::EstimatorStatus&
 void MavrosHelper::mavros_localodom_callback(const nav_msgs::Odometry& msg) {
     // 这里很简单，直接丢进去
     mavros_odometry_data_ = control_common::UAVStateEstimate(msg);
+    mavros_attitude_data_ = mavros_odometry_data_.orientation;
 }
 
 void MavrosHelper::mavros_setpoint_local_callback(const mavros_msgs::PositionTarget& msg) {
@@ -518,8 +519,7 @@ bool MavrosHelper::is_ready() {
             (now_time - mavros_setpoint_local_data_.timestamp) <= timeout;
         mavros_setpoint_attitude_data_.valid =
             (now_time - mavros_setpoint_attitude_data_.timestamp) <= timeout;
-        ready = ready && mavros_setpoint_local_data_.valid &&
-                mavros_setpoint_attitude_data_.valid;
+        ready = ready && mavros_setpoint_local_data_.valid && mavros_setpoint_attitude_data_.valid;
     }
 
     // 控制句柄属于“是否成功初始化接口”，不是时间新鲜度问题。

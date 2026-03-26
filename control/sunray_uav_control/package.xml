@@ -9,9 +9,14 @@
 
   <buildtool_depend>catkin</buildtool_depend>
   <depend>eigen</depend>
+  <depend>geometry_msgs</depend>
+  <depend>mavros_msgs</depend>
+  <depend>nav_msgs</depend>
   <depend>roscpp</depend>
+  <depend>sensor_msgs</depend>
   <depend>sunray_common</depend>
   <test_depend>gtest</test_depend>
+  <test_depend>rostest</test_depend>
 
   <export>
   </export>
