@@ -43,6 +43,15 @@ if(CATKIN_ENABLE_TESTING)
   endif()
 endif()
 
+add_library(sunray_uav_control_lib
+  src/mavros_helper/mavros_helper.cpp
+)
+
+target_link_libraries(sunray_uav_control_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+
 install(DIRECTORY include/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )

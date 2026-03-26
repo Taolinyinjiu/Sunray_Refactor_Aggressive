@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <Eigen/Dense>
+#include <ros/time.h>
 
 namespace control_common {
 
@@ -42,14 +43,17 @@ enum class LandedState : uint8_t {
 
 struct Mavros_State {  // Mavros_State表示这个类型的数据是从mavros中与state相关的话题中获取的
     bool connected = false;  // connected表示px4是否响应了mavros的心跳包，表示px4是否连接
-    bool armed = false;                                 // 表示px4是否解锁
-    bool rc_input = false;                              // 表示是否有rc遥控器的输入
-    uint16_t system_load = 0;                           // 当前飞控的cpu负载
-    float voltage = 0.0f;                               // 当前电池电压
-    float current = 0.0f;                               // 当前电池电流
-    float percent = 0.0f;                               // 当前电池百分比
+    bool armed = false;         // 表示px4是否解锁
+    bool rc_input = false;      // 表示是否有rc遥控器的输入
+    uint8_t system_status = 0;  // 表示系统状态?似乎这里和GPS也有一些关系
+    float system_load = 0;      // 当前飞控的cpu负载
+    float voltage = 0.0f;       // 当前电池电压
+    float current = 0.0f;       // 当前电池电流
+    float percent = 0.0f;       // 当前电池百分比
     FlightMode flight_mode = FlightMode::Undefined;     // 当前飞控模式
     LandedState landed_state = LandedState::Undefined;  // 当前飞控的着地检测器状态
+    ros::Time timestamp = ros::Time(0);
+    bool valid = false;
 };
 
 struct Mavros_Battery {  // Mavros_Battery表示这个类型的数据是从mavros的battery话题中获取的
@@ -57,6 +61,8 @@ struct Mavros_Battery {  // Mavros_Battery表示这个类型的数据是从mavro
     float voltage = 0.0f;  // 当前电池电压
     float current = 0.0f;  // 当前电池电流
     float percent = 0.0f;  // 当前电池百分比
+    ros::Time timestamp = ros::Time(0);
+    bool valid = false;
 };
 
 struct Mavros_Estimator {  // Mavros_Estimator表示这个类型是从mavros的estimator话题中获取的
@@ -67,6 +73,8 @@ struct Mavros_Estimator {  // Mavros_Estimator表示这个类型是从mavros的e
     bool global_vertical_valid = false;  // 表示当前无人机的全球高度位置估计有效
     bool gps_error = false;              // 表示当前gps出现错误
     bool acc_error = false;              // 表示当前加速度计出现错误
+    ros::Time timestamp = ros::Time(0);
+    bool valid = false;
 };
 
 // 姿态数据使用Eigen::Vector3d返回欧拉角，使用Eigen::Quaternion返回四元数,设计两个函数，使用后缀区分
@@ -112,6 +120,8 @@ struct Mavros_SetpointLocal {
     double yaw = 0.0;
     // 目标偏航角速度。
     double yaw_rate = 0.0;
+    ros::Time timestamp = ros::Time(0);
+    bool valid = false;
 };
 
 struct Mavros_SetpointAttitude {
@@ -135,6 +145,8 @@ struct Mavros_SetpointAttitude {
     Eigen::Vector3d body_rate = Eigen::Vector3d::Zero();
     // 归一化总推力。
     double thrust = 0.0;
+    ros::Time timestamp = ros::Time(0);
+    bool valid = false;
 };
 
 };  // namespace control_common

@@ -13,13 +13,22 @@
  *
  */
 
+#pragma once
+
 #include "control_data_types/mavros_helper_data_types.hpp"
 #include "control_data_types/uav_state_estimate.hpp"
 #include <ros/subscriber.h>
 #include <ros/node_handle.h>
-#include "geometry_msgs/Pose.h"
-#include "mavros_msgs/BatteryStatus.h"
 
+#include <mavros_msgs/State.h>
+#include <mavros_msgs/ExtendedState.h>
+#include <mavros_msgs/SysStatus.h>
+#include <mavros_msgs/BatteryStatus.h>
+#include <mavros_msgs/EstimatorStatus.h>
+#include <sensor_msgs/Imu.h>
+#include <nav_msgs/Odometry.h>
+#include <mavros_msgs/PositionTarget.h>
+#include <mavros_msgs/AttitudeTarget.h>
 // 首先，设计这个类，目的是为了将mavros进行抽象，将mavros的接口进行封装，提供给控制器使用
 // 这里存在着三层架构
 // Sunray_FSM(控制模块状态机，与ROS相关，但是与mavros解耦，处理各类回调函数与逻辑)
@@ -55,7 +64,6 @@ struct MavrosHelper_ConfigList {
     bool battery = true;
     bool ekf2_status = false;
     bool local_odom = true;
-    bool local_attitude = false;
     bool uav_control_handle = false;
     bool uav_target_state = false;
     MavrosHelper_ConfigList() = default;
@@ -67,16 +75,17 @@ inline MavrosHelper_ConfigList::MavrosHelper_ConfigList(bool all_change) {
     battery = all_change;
     ekf2_status = all_change;
     local_odom = all_change;
-    local_attitude = all_change;
     uav_control_handle = all_change;
     uav_target_state = all_change;
 }
 
 class MavrosHelper {
-    explicit MavrosHelper(MavrosHelper_ConfigList config_list = MavrosHelper_ConfigList());
-    ~MavrosHelper() = default;
-
   public:
+    explicit MavrosHelper(ros::NodeHandle nh,
+                          MavrosHelper_ConfigList config_list = MavrosHelper_ConfigList());
+    ~MavrosHelper() = default;
+    // 用于表示mavros数据开始获取，已就绪的标识(根据configlist查看对应的数据是否vaild都置位true)
+    bool is_ready();
     // 返回飞控基本状态
     control_common::Mavros_State get_state();
     // 返回飞控电池状态
@@ -86,21 +95,21 @@ class MavrosHelper {
     // 返回飞控里程计状态
     control_common::UAVStateEstimate get_odometry();
     // 返回飞控当前姿态
+    Eigen::Quaterniond get_attitude_quat();
     Eigen::Vector3d get_attitude_eluer_rad();
     Eigen::Vector3d get_attitude_eluer_deg();
-    Eigen::Quaterniond get_attitude_quat();
     // 获取无人机偏航角
-    float get_yaw_rad();
-    float get_yaw_deg();
+    double get_yaw_rad();
+    double get_yaw_deg();
     // 返回飞控当前运动目标
     control_common::Mavros_SetpointLocal get_target_local();
     control_common::Mavros_SetpointAttitude get_target_attitude();
     /*----------------以下部分与uav_control强相关----------------- */
     // 发布vision_pose 向mavros进行融合,返回发布成功或者失败
     bool pub_vision_pose(control_common::UAVStateEstimate uav_state);
-    // 切换px4的模式，返回切换成功或者失败
-    bool set_px4_mode(control_common::FlightMode px4_mode);
-    // 解锁飞控,true解锁，false上锁
+    // 切换px4的模式，返回true并不表示切换成功，只是表示mavros或者px4接受到了这个服务的call并进行处理，需要结合其他话题数据来判断
+    bool set_px4_mode(control_common::FlightMode flight_mode);
+    // 解锁飞控,传入 true解锁，false上锁，返回值同上，并不表示结果，而表示这个触发的请求是否被处理
     bool set_arm(bool arm_state);
     // 向mavros发布setpoint数据
     bool pub_local_setpoint(control_common::Mavros_SetpointLocal setpoint_local);
@@ -110,11 +119,44 @@ class MavrosHelper {
     // ROS话题订阅者
     ros::Subscriber state_sub_;
     ros::Subscriber extended_state_sub_;
+    ros::Subscriber sys_sub_;
     ros::Subscriber battery_sub_;
     ros::Subscriber estimator_sub_;
     ros::Subscriber local_odom_sub_;
-    ros::Subscriber local_attitude_sub_;
+    // ros::Subscriber local_attitude_sub_; 考虑了一下，这里直接从里程计提取姿态数据就好了
     ros::Subscriber setpoint_local_sub_;
     ros::Subscriber setpoint_attitude_sub_;
     // TODO: 这里应该还有与GPS相关的
+    // ROS话题发布者
+    ros::Publisher vision_pose_pub_;
+    ros::Publisher setpoint_local_pub_;
+    ros::Publisher setpoint_attitude_pub_;
+
+    // ROS服务端 -> 主要是Px4的上锁解锁和模式切换
+    ros::ServiceClient px4_arm_client_;
+    ros::ServiceClient px4_mode_client_;
+
+    // 本地缓存
+    MavrosHelper_ConfigList config_cache_;
+    bool mavros_ready = false;
+    control_common::Mavros_State mavros_state_data_;
+    control_common::Mavros_Battery mavros_battery_data_;
+    control_common::Mavros_Estimator mavros_estimator_data_;
+    control_common::UAVStateEstimate mavros_odometry_data_;
+    Eigen::Quaterniond mavros_attitude_data_;
+    control_common::Mavros_SetpointLocal mavros_setpoint_local_data_;
+    control_common::Mavros_SetpointAttitude mavros_setpoint_attitude_data_;
+
+    // 当使用多线程时，如果存在读取和回调同时发生，也就是说读取的数据正在被回调函数写入，此时会存在一些风险
+    // 需要考虑加不加锁以及如何加锁的问题
+
+    // 话题回调函数
+    void mavros_state_callback(const mavros_msgs::State& msg);
+    void mavros_externdedstate_callback(const mavros_msgs::ExtendedState& msg);
+    void mavros_sys_callback(const mavros_msgs::SysStatus& msg);
+    void mavros_battery_callback(const mavros_msgs::BatteryStatus& msg);
+    void mavros_estimator_callback(const mavros_msgs::EstimatorStatus& msg);
+    void mavros_localodom_callback(const nav_msgs::Odometry& msg);
+    void mavros_setpoint_local_callback(const mavros_msgs::PositionTarget& msg);
+    void mavros_setpoint_attitude_callback(const mavros_msgs::AttitudeTarget& msg);
 };
