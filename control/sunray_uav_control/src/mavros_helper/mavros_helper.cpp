@@ -382,7 +382,7 @@ void MavrosHelper::mavros_sys_callback(const mavros_msgs::SysStatus& msg) {
         mavros_state_data_.voltage = static_cast<float>(msg.voltage_battery) / 1000.0f;
     }
     if (msg.current_battery != -1) {  // -1 表示无效值
-        mavros_state_data_.current = static_cast<float>(msg.current_battery) / 100.0f;
+        mavros_state_data_.current = static_cast<float>(msg.current_battery) / 1000.0f;
     }
     if (msg.battery_remaining != -1) {  // -1 表示无效值
         mavros_state_data_.percent = static_cast<float>(msg.battery_remaining) / 100.0f;
